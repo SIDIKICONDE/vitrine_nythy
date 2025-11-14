@@ -56,12 +56,12 @@ export function getDefaultEnvironmentalImpact(
 ): EnvironmentalDefaults {
   if (!category) {
     return {
-      weightGrams: DEFAULT_WEIGHTS.other,
-      co2SavedGrams: calculateCo2(DEFAULT_WEIGHTS.other, 'other'),
+      weightGrams: DEFAULT_WEIGHTS.other!,
+      co2SavedGrams: calculateCo2(DEFAULT_WEIGHTS.other!, 'other'),
     };
   }
 
-  const weight = DEFAULT_WEIGHTS[category] ?? DEFAULT_WEIGHTS.other;
+  const weight = DEFAULT_WEIGHTS[category] ?? DEFAULT_WEIGHTS.other!;
   const co2 = calculateCo2(weight, category);
 
   return {
@@ -77,7 +77,7 @@ export function calculateCo2(weightGrams: number, category: string | null): numb
   if (weightGrams <= 0) return 0;
 
   const weightKg = weightGrams / 1000;
-  const factor = CO2_FACTORS[category || 'other'] || CO2_FACTORS.other;
+  const factor = CO2_FACTORS[category || 'other'] ?? CO2_FACTORS.other!;
 
   return Math.round(weightKg * factor); // Arrondir pour simplicité
 }
