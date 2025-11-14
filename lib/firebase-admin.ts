@@ -43,23 +43,53 @@ if (getApps().length === 0) {
       const clientEmail = process.env['FIREBASE_CLIENT_EMAIL'];
       
       if (privateKey && clientEmail && privateKey !== 'your-private-key-here') {
-        // Nettoyer la clé privée (enlever les guillemets au début/fin si présents)
+        // Nettoyer la clé privée de manière robuste
         let cleanedPrivateKey = privateKey.trim();
-        if (cleanedPrivateKey.startsWith('"') && cleanedPrivateKey.endsWith('"')) {
+        
+        // Enlever les guillemets au début/fin si présents
+        if ((cleanedPrivateKey.startsWith('"') && cleanedPrivateKey.endsWith('"')) ||
+            (cleanedPrivateKey.startsWith("'") && cleanedPrivateKey.endsWith("'"))) {
           cleanedPrivateKey = cleanedPrivateKey.slice(1, -1);
         }
+        
+        // Remplacer les séquences d'échappement \n par de vrais retours à la ligne
         cleanedPrivateKey = cleanedPrivateKey.replace(/\\n/g, '\n');
         
+        // Si la clé ne contient pas de retours à la ligne mais contient des espaces,
+        // essayer de la reformater (cas où la clé est sur une seule ligne)
+        if (!cleanedPrivateKey.includes('\n') && cleanedPrivateKey.includes('BEGIN PRIVATE KEY')) {
+          // La clé est probablement sur une seule ligne, essayer de la reformater
+          // Format attendu: -----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+          cleanedPrivateKey = cleanedPrivateKey
+            .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
+            .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----')
+            .replace(/\s+/g, '\n'); // Remplacer les espaces multiples par des retours à la ligne
+        }
+        
+        // Vérifier que la clé est valide avant d'essayer de l'utiliser
+        if (!cleanedPrivateKey.includes('BEGIN PRIVATE KEY') || !cleanedPrivateKey.includes('END PRIVATE KEY')) {
+          throw new Error('FIREBASE_PRIVATE_KEY format invalide: doit contenir -----BEGIN PRIVATE KEY----- et -----END PRIVATE KEY-----');
+        }
+        
         // Utiliser les credentials explicites
-        initializeApp({
-          credential: cert({
-            projectId,
-            clientEmail: clientEmail.trim(),
-            privateKey: cleanedPrivateKey,
-          }),
-          storageBucket,
-        });
-        console.log('✅ Firebase Admin initialisé avec credentials depuis .env.local');
+        try {
+          initializeApp({
+            credential: cert({
+              projectId,
+              clientEmail: clientEmail.trim(),
+              privateKey: cleanedPrivateKey,
+            }),
+            storageBucket,
+          });
+          console.log('✅ Firebase Admin initialisé avec credentials depuis variables d\'environnement');
+        } catch (certError: any) {
+          console.error('❌ Erreur lors de l\'initialisation avec cert:', certError.message);
+          console.error('💡 Vérifiez que FIREBASE_PRIVATE_KEY est correctement formaté:');
+          console.error('   - Doit contenir -----BEGIN PRIVATE KEY----- et -----END PRIVATE KEY-----');
+          console.error('   - Les retours à la ligne doivent être représentés par \\n');
+          console.error('   - Exemple: FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"');
+          throw certError;
+        }
       } else {
         // Essayer d'utiliser les credentials par défaut (Firebase CLI ou Google Cloud)
         try {

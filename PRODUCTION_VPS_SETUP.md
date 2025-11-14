@@ -61,7 +61,11 @@ NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:xxxxxxxxxxxxxxxx
 # Firebase Admin (Backend)
 FIREBASE_PROJECT_ID=nythy-72973
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@nythy-72973.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nVOTRE_CLE_PRIVEE_ICI\n-----END PRIVATE KEY-----\n"
+# IMPORTANT: La clé privée doit être formatée avec \n pour les retours à la ligne
+# Option 1: Format avec \n (recommandé)
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...\n-----END PRIVATE KEY-----\n"
+# Option 2: Format sur une seule ligne (le code la reformatera automatiquement)
+# FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY----- MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC... -----END PRIVATE KEY-----"
 
 # -----------------------------------------------------------------------------
 # reCAPTCHA (App Check)
@@ -80,7 +84,64 @@ NODE_ENV=production
 # VPNAPI_KEY=votre_cle_api_vpn (optionnel)
 ```
 
-### Étape 2 : Générer AUTH_SECRET Sécurisé
+### Étape 2 : Obtenir et Formater la Clé Privée Firebase
+
+**⚠️ CRITIQUE :** La clé privée Firebase doit être correctement formatée pour fonctionner.
+
+#### A. Obtenir la clé privée depuis Firebase Console
+
+1. Allez sur [Firebase Console](https://console.firebase.google.com/)
+2. Sélectionnez votre projet (`nythy-72973`)
+3. Allez dans **Paramètres du projet** (⚙️) → **Comptes de service**
+4. Cliquez sur **Générer une nouvelle clé privée**
+5. Un fichier JSON sera téléchargé (ex: `nythy-72973-firebase-adminsdk-xxxxx.json`)
+
+#### B. Extraire la clé privée du fichier JSON
+
+Ouvrez le fichier JSON téléchargé et copiez :
+- `private_key` → pour `FIREBASE_PRIVATE_KEY`
+- `client_email` → pour `FIREBASE_CLIENT_EMAIL`
+- `project_id` → pour `FIREBASE_PROJECT_ID`
+
+#### C. Formater la clé privée pour `.env.production`
+
+**Option 1 : Format avec `\n` (RECOMMANDÉ)**
+
+La clé privée du JSON contient déjà des retours à la ligne. Vous devez les remplacer par `\n` :
+
+```bash
+# Sur Linux/Mac, utilisez cette commande pour formater automatiquement :
+cat votre-fichier-service-account.json | jq -r '.private_key' | sed 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//'
+```
+
+Ou manuellement, remplacez chaque retour à la ligne par `\n` :
+
+```env
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...\n-----END PRIVATE KEY-----\n"
+```
+
+**Option 2 : Format sur une seule ligne**
+
+Vous pouvez aussi mettre la clé sur une seule ligne (le code la reformatera automatiquement) :
+
+```env
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY----- MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC... -----END PRIVATE KEY-----"
+```
+
+**⚠️ IMPORTANT :**
+- La clé doit être entre guillemets (`"`)
+- Les retours à la ligne doivent être `\n` (pas de vrais retours à la ligne dans le fichier .env)
+- Ne pas oublier le `\n` final après `-----END PRIVATE KEY-----`
+
+#### D. Script automatique de formatage
+
+Utilisez le script `scripts/format-firebase-key.sh` pour formater automatiquement :
+
+```bash
+bash scripts/format-firebase-key.sh votre-fichier-service-account.json
+```
+
+### Étape 3 : Générer AUTH_SECRET Sécurisé
 
 ```bash
 # Méthode 1 : OpenSSL
@@ -272,6 +333,9 @@ pm2 show vitrine_nythy
 ## 📊 Checklist de Vérification
 
 - [ ] ✅ AUTH_SECRET généré et configuré (minimum 32 caractères)
+- [ ] ✅ FIREBASE_PRIVATE_KEY correctement formaté (avec `\n` pour les retours à la ligne)
+- [ ] ✅ FIREBASE_CLIENT_EMAIL configuré
+- [ ] ✅ FIREBASE_PROJECT_ID configuré
 - [ ] ✅ Toutes les variables Firebase configurées
 - [ ] ✅ `.env.production` créé avec les bonnes valeurs
 - [ ] ✅ `node_modules` réinstallé proprement
@@ -279,6 +343,7 @@ pm2 show vitrine_nythy
 - [ ] ✅ Build production réussi (`.next/` contient les fichiers)
 - [ ] ✅ PM2 configuré avec `ecosystem.config.js`
 - [ ] ✅ Application démarre sans erreur `AUTH_SECRET`
+- [ ] ✅ Application démarre sans erreur `FIREBASE_PRIVATE_KEY`
 - [ ] ✅ Application démarre sans erreur `geoip-lite`
 - [ ] ✅ Logs PM2 ne montrent plus d'erreurs critiques
 - [ ] ✅ L'application est accessible via le domaine
@@ -317,6 +382,63 @@ npm install geoip-lite
 
 # Vérifier à nouveau
 ls -la node_modules/geoip-lite/data/
+```
+
+### L'erreur "Failed to parse private key" persiste
+
+Cette erreur signifie que `FIREBASE_PRIVATE_KEY` n'est pas correctement formaté.
+
+**Solution 1 : Utiliser le script de formatage**
+
+```bash
+# Si vous avez le fichier JSON du service account
+bash scripts/format-firebase-key.sh votre-fichier-service-account.json
+
+# Copiez les valeurs dans .env.production
+nano .env.production
+```
+
+**Solution 2 : Vérifier manuellement le format**
+
+```bash
+# Vérifier que la variable est bien définie
+grep FIREBASE_PRIVATE_KEY .env.production
+
+# La clé doit :
+# 1. Être entre guillemets
+# 2. Contenir \n (pas de vrais retours à la ligne)
+# 3. Commencer par -----BEGIN PRIVATE KEY-----
+# 4. Finir par -----END PRIVATE KEY-----
+
+# Exemple correct:
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+```
+
+**Solution 3 : Utiliser le fichier JSON directement**
+
+Si le formatage de la clé privée pose problème, vous pouvez utiliser le fichier JSON directement :
+
+```bash
+# Copier le fichier service account sur le serveur
+scp votre-fichier-service-account.json root@votre-serveur:/var/www/vitrine_nythy/firebase-service-account.json
+
+# Le code utilisera automatiquement ce fichier au lieu des variables d'environnement
+```
+
+**Solution 4 : Vérifier les logs détaillés**
+
+```bash
+# Voir les logs complets pour plus de détails
+pm2 logs vitrine_nythy --lines 50 | grep -i "private\|firebase\|cert"
+
+# Ou tester manuellement
+cd /var/www/vitrine_nythy
+node -e "
+const key = process.env.FIREBASE_PRIVATE_KEY;
+if (!key) console.log('❌ FIREBASE_PRIVATE_KEY non défini');
+else if (!key.includes('BEGIN PRIVATE KEY')) console.log('❌ Format invalide');
+else console.log('✅ Format semble correct');
+"
 ```
 
 ### High Error Rate Alert
