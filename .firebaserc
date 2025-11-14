@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "default": "nythy-72973",
+    "dev": "nythy-dev",
+    "staging": "nythy-staging",
+    "prod": "nythy-prod"
+  },
+  "targets": {},
+  "etags": {}
+}

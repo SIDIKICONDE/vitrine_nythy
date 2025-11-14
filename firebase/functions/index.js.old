@@ -1,0 +1,729 @@
+const { onCall } = require('firebase-functions/v2/https');
+const { HttpsError } = require('firebase-functions/https');
+const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require('firebase-functions/v2/firestore');
+const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
+
+admin.initializeApp();
+
+// =========================================
+// SYSTÈME DE PARRAINAGE (Désactivé temporairement - à migrer v2)
+// =========================================
+// const referrals = require('./referrals');
+// exports.onReferralCreated = referrals.onReferralCreated;
+// exports.validateReferralCode = referrals.validateReferralCode;
+// exports.getReferralStats = referrals.getReferralStats;
+// exports.cleanupInactiveReferralCodes = referrals.cleanupInactiveReferralCodes;
+
+// =========================================
+// FONCTION NOTIFICATIONS (messaging)
+// =========================================
+
+/**
+ * Traite les requêtes de notifications et envoie via FCM
+ * Document d'entrée: notification_requests/{requestId}
+ * Champs attendus:
+ *  - type: 'message' | 'group_event'
+ *  - recipientIds: string[]
+ *  - payload: { notification, data, android?, apns? }
+ *  - conversationId: string
+ *  - senderId: string (== request.auth.uid côté client)
+ *  - createdAt: serverTimestamp
+ *  - status: 'pending'
+ */
+exports.processNotificationRequests = onDocumentCreated('notification_requests/{requestId}', async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) return null;
+  const data = snapshot.data();
+  const requestRef = snapshot.ref;
+
+  try {
+    const recipientIds = Array.isArray(data.recipientIds) ? data.recipientIds : [];
+    if (recipientIds.length === 0) {
+      await requestRef.update({ status: 'skipped', reason: 'no_recipients' });
+      return null;
+    }
+
+    // Récupérer les tokens des destinataires (champ users/{id}.deviceToken)
+    const db = admin.firestore();
+    const tokens = [];
+    for (const uid of recipientIds) {
+      const userDoc = await db.collection('users').doc(uid).get();
+      const token = userDoc.exists ? userDoc.get('deviceToken') : null;
+      if (token && typeof token === 'string') {
+        tokens.push(token);
+      }
+    }
+
+    if (tokens.length === 0) {
+      await requestRef.update({ status: 'skipped', reason: 'no_tokens' });
+      return null;
+    }
+
+    const payload = data.payload || {};
+    const multicast = {
+      tokens,
+      notification: payload.notification,
+      data: payload.data,
+      android: payload.android,
+      apns: payload.apns,
+    };
+
+    // Créer des notifications persistées pour l'app (lecture côté client)
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await Promise.all(recipientIds.map(async (rid) => {
+      const notifRef = db.collection('notifications').doc();
+      const title = (payload.notification && payload.notification.title) || '';
+      const message = (payload.notification && payload.notification.body) || '';
+      const extra = payload.data || {};
+      await notifRef.set({
+        id: notifRef.id,
+        type: data.type || 'generic',
+        recipientId: rid,
+        title: title,
+        message: message,
+        data: extra,
+        createdAt: now,
+        isRead: false,
+        readAt: null,
+        senderId: data.senderId || null,
+        postId: extra.postId || null,
+        commentId: extra.commentId || null,
+        challengeId: extra.challengeId || null,
+        storeId: extra.storeId || null,
+      });
+    }));
+
+    const response = await admin.messaging().sendEachForMulticast(multicast);
+
+    const successCount = response.successCount || 0;
+    const failureCount = response.failureCount || 0;
+
+    await requestRef.update({
+      status: failureCount === 0 ? 'sent' : (successCount > 0 ? 'partial' : 'failed'),
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      successCount,
+      failureCount,
+    });
+
+    return null;
+  } catch (e) {
+    console.error('Notification processing failed:', e);
+    await requestRef.update({ status: 'failed', error: (e && e.message) ? e.message : 'unknown' });
+    return null;
+  }
+});
+
+// =========================================
+// FONCTIONS POUR GESTION DES COMPTEURS
+// =========================================
+
+/**
+ * Met à jour les compteurs de réactions d'un post
+ */
+exports.updatePostReactionCounts = onDocumentWritten('posts/{postId}/reactions/{reactionId}', async (event) => {
+  const postId = event.params.postId;
+  const postRef = admin.firestore().collection('posts').doc(postId);
+
+  // Compter les réactions par type
+  const reactionsSnapshot = await postRef.collection('reactions').get();
+  const reactionCounts = {};
+
+  // Initialiser les compteurs
+  ['like', 'love', 'helpful', 'awesome', 'wow', 'sad'].forEach(type => {
+    reactionCounts[type] = 0;
+  });
+
+  // Compter les réactions
+  reactionsSnapshot.forEach(doc => {
+    const reaction = doc.data();
+    const type = reaction.type;
+    if (reactionCounts.hasOwnProperty(type)) {
+      reactionCounts[type]++;
+    }
+  });
+
+  const totalLikes = reactionCounts.like + reactionCounts.love +
+    reactionCounts.helpful + reactionCounts.awesome +
+    reactionCounts.wow;
+
+  // Calculer le score d'engagement (likes + commentaires * 2 + partages * 3 + vues * 0.1)
+  const postDoc = await postRef.get();
+  const postData = postDoc.data();
+  const commentsCount = postData.commentsCount || 0;
+  const sharesCount = postData.sharesCount || 0;
+  const viewsCount = postData.viewsCount || 0;
+
+  const engagementScore = totalLikes + (commentsCount * 2) + (sharesCount * 3) + (viewsCount * 0.1);
+
+  // Mettre à jour les compteurs du post
+  await postRef.update({
+    likesCount: totalLikes,
+    engagementScore: engagementScore,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return null;
+});
+
+/**
+ * Met à jour les compteurs de commentaires d'un post
+ */
+exports.updatePostCommentCounts = onDocumentWritten('posts/{postId}/comments/{commentId}', async (event) => {
+  const postId = event.params.postId;
+  const postRef = admin.firestore().collection('posts').doc(postId);
+
+  // Compter les commentaires de niveau 0 (non réponses)
+  const commentsSnapshot = await postRef.collection('comments')
+    .where('parentCommentId', '==', null)
+    .get();
+
+  const commentsCount = commentsSnapshot.size;
+
+  // Compter toutes les réponses pour le score d'engagement
+  const allCommentsSnapshot = await postRef.collection('comments').get();
+  const totalComments = allCommentsSnapshot.size;
+
+  // Recalculer le score d'engagement
+  const postDoc = await postRef.get();
+  const postData = postDoc.data();
+  const likesCount = postData.likesCount || 0;
+  const sharesCount = postData.sharesCount || 0;
+  const viewsCount = postData.viewsCount || 0;
+
+  const engagementScore = likesCount + (totalComments * 2) + (sharesCount * 3) + (viewsCount * 0.1);
+
+  // Mettre à jour les compteurs du post
+  await postRef.update({
+    commentsCount: commentsCount,
+    engagementScore: engagementScore,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return null;
+});
+
+/**
+ * Met à jour les compteurs de réponses d'un commentaire
+ */
+exports.updateCommentReplyCounts = onDocumentWritten('posts/{postId}/comments/{commentId}', async (event) => {
+  const postId = event.params.postId;
+  const commentId = event.params.commentId;
+  const commentRef = admin.firestore()
+    .collection('posts').doc(postId)
+    .collection('comments').doc(commentId);
+
+  // Compter les réponses (commentaires qui ont ce commentaire comme parent)
+  const repliesSnapshot = await admin.firestore()
+    .collection('posts').doc(postId)
+    .collection('comments')
+    .where('parentCommentId', '==', commentId)
+    .get();
+
+  const repliesCount = repliesSnapshot.size;
+
+  // Mettre à jour le compteur de réponses du commentaire
+  await commentRef.update({
+    repliesCount: repliesCount,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return null;
+});
+
+
+// =========================================
+// FONCTIONS SUPPLÉMENTAIRES
+// =========================================
+
+/**
+ * Nettoie les ressources associées lors de la suppression d'un post
+ */
+exports.cleanupPostResources = onDocumentDeleted('posts/{postId}', async (event) => {
+  const postId = event.params.postId;
+
+  // Supprimer tous les commentaires et leurs réactions
+  const commentsRef = admin.firestore()
+    .collection('posts').doc(postId)
+    .collection('comments');
+
+  const commentsSnapshot = await commentsRef.get();
+
+  const batch = admin.firestore().batch();
+
+  for (const commentDoc of commentsSnapshot.docs) {
+    // Supprimer les réactions du commentaire
+    const reactionsRef = commentDoc.ref.collection('reactions');
+    const reactionsSnapshot = await reactionsRef.get();
+
+    reactionsSnapshot.forEach(reactionDoc => {
+      batch.delete(reactionDoc.ref);
+    });
+
+    // Supprimer le commentaire
+    batch.delete(commentDoc.ref);
+  }
+
+  // Supprimer les réactions du post
+  const postReactionsRef = admin.firestore()
+    .collection('posts').doc(postId)
+    .collection('reactions');
+
+  const postReactionsSnapshot = await postReactionsRef.get();
+  postReactionsSnapshot.forEach(reactionDoc => {
+    batch.delete(reactionDoc.ref);
+  });
+
+  await batch.commit();
+
+  console.log(`Nettoyage terminé pour le post ${postId}`);
+  return null;
+});
+
+// =========================================
+// IMPORT DES MODULES AUTH
+// =========================================
+
+const auth = require('./auth');
+
+// Export des fonctions auth
+exports.onUserCreate = auth.onUserCreate;
+exports.onUserDelete = auth.onUserDelete;
+exports.updateUserProfile = auth.updateUserProfile;
+exports.updateDeviceToken = auth.updateDeviceToken;
+
+// =========================================
+// IMPORT DES MODULES ADMIN
+// =========================================
+
+const adminModule = require('./admin');
+
+// Export des fonctions admin
+exports.makeUserAdmin = adminModule.makeUserAdmin;
+exports.removeUserAdmin = adminModule.removeUserAdmin;
+exports.banUser = adminModule.banUser;
+exports.unbanUser = adminModule.unbanUser;
+exports.verifyMerchant = adminModule.verifyMerchant;
+exports.rejectMerchant = adminModule.rejectMerchant;
+
+// =========================================
+// IMPORT DES MODULES MARCHANDS
+// =========================================
+
+const merchants = require('./merchants');
+
+// Export des fonctions marchands
+exports.createMerchant = merchants.createMerchant;
+exports.updateMerchant = merchants.updateMerchant;
+exports.deleteMerchant = merchants.deleteMerchant;
+exports.createProduct = merchants.createProduct;
+exports.updateProduct = merchants.updateProduct;
+exports.deleteProduct = merchants.deleteProduct;
+exports.createOffer = merchants.createOffer;
+exports.updateOffer = merchants.updateOffer;
+exports.deleteOffer = merchants.deleteOffer;
+exports.incrementMerchantViews = merchants.incrementMerchantViews;
+
+// =========================================
+// IMPORT DES MODULES MARCHANDS - GEOHASH (Optimisé)
+// =========================================
+
+const merchantsGeohash = require('./merchants_geohash');
+
+// Export des fonctions GeoHash optimisées
+exports.searchNearbyMerchantsV2 = merchantsGeohash.searchNearbyMerchantsV2;
+exports.getGeohashInfo = merchantsGeohash.getGeohashInfo;
+exports.getGeohashStats = merchantsGeohash.getGeohashStats;
+
+// =========================================
+// IMPORT DES MODULES OFFRES - GEOHASH (Optimisé)
+// =========================================
+
+const offersGeohash = require('./search_offers_geohash');
+
+// Export des fonctions de recherche d'offres optimisées
+exports.searchOffersNearby = offersGeohash.searchOffersNearby;
+
+// =========================================
+// IMPORT DES MODULES COMMUNITY
+// =========================================
+
+const community = require('./community');
+
+// Posts
+exports.createPost = community.createPost;
+exports.updatePost = community.updatePost;
+exports.deletePost = community.deletePost;
+exports.pinPost = community.pinPost;
+exports.repostPost = community.repostPost;
+exports.incrementPostViews = community.incrementPostViews;
+exports.incrementPostShares = community.incrementPostShares;
+
+// Comments
+exports.createComment = community.createComment;
+exports.deleteComment = community.deleteComment;
+
+// Reactions
+exports.addReaction = community.addReaction;
+exports.removeReaction = community.removeReaction;
+
+// Notifications
+exports.enqueueNotification = community.enqueueNotification;
+exports.markNotificationRead = community.markNotificationRead;
+exports.markAllNotificationsRead = community.markAllNotificationsRead;
+exports.deleteNotification = community.deleteNotification;
+
+// Triggers
+exports.onReactionWrite = community.onReactionWrite;
+exports.onCommentWrite = community.onCommentWrite;
+exports.onPostDelete = community.onPostDelete;
+
+// =========================================
+// IMPORT DES MODULES CHALLENGES
+// =========================================
+
+const challenges = require('./challenges');
+
+// Export des fonctions challenges
+exports.updateChallengeStats = challenges.updateChallengeStats;
+exports.resetRecurringChallenges = challenges.resetRecurringChallenges;
+exports.updateGlobalChallengeStats = challenges.updateGlobalChallengeStats;
+exports.updateUserChallengeStats = challenges.updateUserChallengeStats;
+exports.updateCommunityChallengeLeaderboard = challenges.updateCommunityChallengeLeaderboard;
+exports.cleanupExpiredChallenges = challenges.cleanupExpiredChallenges;
+exports.generateRecommendedChallenges = challenges.generateRecommendedChallenges;
+
+// =========================================
+// FONCTION EMAIL
+// =========================================
+
+/**
+ * Envoie un email via Nodemailer
+ * Configuration SMTP à définir via variables d'environnement
+ */
+exports.sendEmail = onCall(async (request) => {
+  // Vérifier l'authentification (optionnel selon les besoins)
+  // if (!request.auth) {
+  //   throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+  // }
+
+  const { to, subject, message, priority = 'normal' } = request.data;
+
+  if (!to || !Array.isArray(to) || to.length === 0) {
+    throw new HttpsError('invalid-argument', 'Destinataires requis');
+  }
+
+  if (!subject || !message) {
+    throw new HttpsError('invalid-argument', 'Sujet et message requis');
+  }
+
+  try {
+    // Configuration du transport SMTP
+    // À configurer avec vos propres credentials SMTP (Gmail, SendGrid, etc.)
+    const transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT) || 587,
+      secure: false, // true pour 465, false pour 587
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    // Préparer l'email
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: to.join(','),
+      subject: subject,
+      text: message,
+      html: message.replace(/\n/g, '<br>'), // Conversion basique en HTML
+      priority: priority === 'high' ? 'high' : 'normal',
+    };
+
+    // Envoyer l'email
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log('Email envoyé:', info.messageId);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error) {
+    console.error('Erreur envoi email:', error);
+    throw new HttpsError('internal', 'Erreur lors de l\'envoi de l\'email');
+  }
+});
+
+// =========================================
+// IMPORT DES FONCTIONS STRIPE (TypeScript)
+// =========================================
+
+// Importer les fonctions Stripe compilées depuis TypeScript
+const stripeAPI = require('./lib/index');
+exports.api = stripeAPI.api;
+
+// =========================================
+// IMPORT DES FONCTIONS SUPPLÉMENTAIRES
+// =========================================
+
+// Exporter les fonctions supplémentaires de merchants
+exports.getMerchant = merchants.getMerchant;
+exports.searchMerchants = merchants.searchMerchants;
+
+// Importer les événements marchands
+const merchantEvents = require('./merchant_events');
+exports.onOrderCreated = merchantEvents.onOrderCreated;
+exports.onOrderPickedUp = merchantEvents.onOrderPickedUp;
+exports.onReviewCreated = merchantEvents.onReviewCreated;
+exports.onMerchantVerified = merchantEvents.onMerchantVerified;
+exports.checkLowStock = merchantEvents.checkLowStock;
+exports.cleanOldEvents = merchantEvents.cleanOldEvents;
+exports.onPaymentReceived = merchantEvents.onPaymentReceived;
+
+// Importer les fonctions de diagnostic et correction
+const fixMerchantOwner = require('./fix_merchant_owner');
+exports.fixMerchantOwner = fixMerchantOwner.fixMerchantOwner;
+exports.diagnoseMerchantAccess = fixMerchantOwner.diagnoseMerchantAccess;
+
+// =========================================
+// IMPORT DES FONCTIONS COMPRESSION IMAGES
+// =========================================
+
+const imageCompression = require('./image_compression');
+exports.compressUploadedImage = imageCompression.compressUploadedImage;
+exports.compressExistingImage = imageCompression.compressExistingImage;
+
+// =========================================
+// IMPORT DES TRIGGERS STATS MARCHANDS
+// =========================================
+
+const merchantStatsTriggers = require('./merchant_stats_triggers');
+
+// Export des triggers pour maintenir les stats à jour automatiquement
+exports.updateProductCount = merchantStatsTriggers.updateProductCount;
+exports.incrementFollowers = merchantStatsTriggers.incrementFollowers;
+exports.decrementFollowers = merchantStatsTriggers.decrementFollowers;
+exports.updateReviewStats = merchantStatsTriggers.updateReviewStats;
+exports.updateSalesCount = merchantStatsTriggers.updateSalesCount;
+// Note: incrementMerchantViews est déjà exporté via merchants.incrementMerchantViews
+// mais on peut le remplacer par celui des triggers si nécessaire
+
+// =========================================
+// MIGRATION DES NOMS D'AFFICHAGE
+// =========================================
+
+const { migrateDisplayNames } = require('./migrations/fix_user_display_names');
+
+/**
+ * Fonction callable pour migrer les noms d'affichage des utilisateurs
+ * Réservée aux administrateurs
+ */
+exports.migrateUserDisplayNames = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+  }
+
+  // Vérifier que l'utilisateur est admin
+  const isAdmin = await auth.checkIsAdmin(request.auth.uid);
+  if (!isAdmin) {
+    throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+  }
+
+  try {
+    const result = await migrateDisplayNames();
+    return result;
+  } catch (error) {
+    console.error('Erreur lors de la migration:', error);
+    throw new HttpsError('internal', `Erreur lors de la migration: ${error.message}`);
+  }
+});
+
+// =========================================
+// FONCTIONS D'ANNONCES (ANNOUNCEMENTS)
+// =========================================
+
+/**
+ * Envoie une annonce à tous les utilisateurs (ou à une audience ciblée)
+ */
+exports.sendAnnouncementToAll = onCall(async (request) => {
+  // Vérifier que l'utilisateur est admin
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+  }
+
+  const db = admin.firestore();
+  const userId = request.auth.uid;
+
+  // Vérifier si l'utilisateur est admin
+  const userDoc = await db.collection('users').doc(userId).get();
+  const userRole = userDoc.exists ? userDoc.data().role : 'user';
+
+  if (userRole !== 'admin') {
+    throw new HttpsError('permission-denied', 'Seuls les administrateurs peuvent envoyer des annonces');
+  }
+
+  const { announcementId } = request.data;
+
+  if (!announcementId) {
+    throw new HttpsError('invalid-argument', 'ID d\'annonce requis');
+  }
+
+  try {
+    // Récupérer l'annonce
+    const announcementRef = db.collection('announcements').doc(announcementId);
+    const announcementDoc = await announcementRef.get();
+
+    if (!announcementDoc.exists) {
+      throw new HttpsError('not-found', 'Annonce introuvable');
+    }
+
+    const announcement = announcementDoc.data();
+
+    // Vérifier que l'annonce n'a pas déjà été envoyée
+    if (announcement.status === 'sent') {
+      throw new HttpsError('failed-precondition', 'Cette annonce a déjà été envoyée');
+    }
+
+    // Mettre à jour le statut en "sending"
+    await announcementRef.update({
+      status: 'sending',
+    });
+
+    // Récupérer tous les utilisateurs selon l'audience ciblée
+    let usersQuery = db.collection('users').where('isActive', '==', true);
+
+    const targetAudience = announcement.targetAudience || 'all';
+
+    if (targetAudience === 'users') {
+      usersQuery = usersQuery.where('role', '==', 'user');
+    } else if (targetAudience === 'merchants') {
+      usersQuery = usersQuery.where('role', '==', 'storeOwner');
+    } else if (targetAudience === 'verified') {
+      usersQuery = usersQuery.where('isVerified', '==', true);
+    }
+
+    const usersSnapshot = await usersQuery.get();
+    const users = usersSnapshot.docs;
+
+    console.log(`Envoi de l'annonce à ${users.length} utilisateurs...`);
+
+    // Récupérer les tokens FCM
+    const tokens = [];
+    const userIds = [];
+
+    users.forEach(userDoc => {
+      const userData = userDoc.data();
+      const token = userData.deviceToken;
+
+      if (token && typeof token === 'string') {
+        tokens.push(token);
+        userIds.push(userDoc.id);
+      }
+    });
+
+    console.log(`${tokens.length} tokens FCM trouvés`);
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    // Envoyer les notifications par batch de 500 (limite FCM)
+    const batchSize = 500;
+    for (let i = 0; i < tokens.length; i += batchSize) {
+      const batchTokens = tokens.slice(i, i + batchSize);
+
+      // Préparer le message FCM
+      const message = {
+        notification: {
+          title: announcement.title,
+          body: announcement.message,
+        },
+        data: {
+          type: 'announcement',
+          announcementId: announcementId,
+          announcementType: announcement.type || 'general',
+          actionUrl: announcement.actionUrl || '',
+          actionLabel: announcement.actionLabel || '',
+        },
+      };
+
+      if (announcement.imageUrl) {
+        message.notification.imageUrl = announcement.imageUrl;
+      }
+
+      // Envoyer via FCM
+      try {
+        const multicastMessage = {
+          ...message,
+          tokens: batchTokens,
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(multicastMessage);
+        successCount += response.successCount || 0;
+        failureCount += response.failureCount || 0;
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi du batch:', error);
+        failureCount += batchTokens.length;
+      }
+    }
+
+    // Créer des notifications persistées pour tous les utilisateurs
+    const batch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    userIds.forEach(uid => {
+      const notifRef = db.collection('notifications').doc();
+      batch.set(notifRef, {
+        id: notifRef.id,
+        type: 'announcement',
+        recipientId: uid,
+        title: announcement.title,
+        message: announcement.message,
+        data: {
+          announcementId: announcementId,
+          announcementType: announcement.type || 'general',
+          actionUrl: announcement.actionUrl || '',
+          actionLabel: announcement.actionLabel || '',
+          imageUrl: announcement.imageUrl || '',
+        },
+        createdAt: now,
+        isRead: false,
+        readAt: null,
+      });
+    });
+
+    await batch.commit();
+
+    // Mettre à jour l'annonce avec le statut et les statistiques
+    await announcementRef.update({
+      status: 'sent',
+      sentCount: successCount,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`Annonce envoyée: ${successCount} succès, ${failureCount} échecs`);
+
+    return {
+      success: true,
+      sentCount: successCount,
+      failureCount: failureCount,
+      totalUsers: users.length,
+    };
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'annonce:', error);
+
+    // Mettre à jour le statut de l'annonce en "failed"
+    await db.collection('announcements').doc(announcementId).update({
+      status: 'draft',
+    });
+
+    throw new HttpsError('internal', `Erreur lors de l'envoi de l'annonce: ${error.message}`);
+  }
+});
+
+// =========================================
+// REPORTS / SIGNALEMENTS
+// =========================================
+const reports = require('./reports');
+
+exports.onReportCreated = reports.onReportCreated;
+exports.onReportResolved = reports.onReportResolved;
+exports.getReportStatistics = reports.getReportStatistics;
+exports.getContentReports = reports.getContentReports;

@@ -1,0 +1,851 @@
+@import "tailwindcss";
+
+/**
+ * ========================================
+ * SYSTÈME DE COULEURS NYTHY
+ * ========================================
+ * Variables CSS personnalisées avec la charte graphique Nythy
+ * Le thème s'adapte automatiquement aux préférences système de Windows
+ */
+
+@layer base {
+  :root {
+    /* ===== COULEURS NYTHY - THÈME CLAIR ===== */
+
+    /* Couleurs de surface (backgrounds) */
+    --color-surface: 245 245 245;
+    /* #F5F5F5 - Clair Nythy */
+    --color-surface-muted: 235 235 235;
+    /* Légèrement plus foncé que clair */
+    --color-surface-inverse: 1 14 14;
+    /* #010e0e - Sombre Nythy */
+    --color-surface-elevated: 255 255 255;
+    /* Blanc pur pour éléments élevés */
+    --color-surface-overlay: 0 0 0;
+    /* Overlay semi-transparent */
+
+    /* Couleurs de texte */
+    --color-foreground: 1 14 14;
+    /* #010e0e - Texte principal sombre */
+    --color-foreground-muted: 80 100 100;
+    /* Texte secondaire - dérivé de la couleur principale */
+    --color-foreground-subtle: 150 160 160;
+    /* Texte tertiaire - plus clair */
+    --color-foreground-inverse: 245 245 245;
+    /* Texte inversé (clair sur fond sombre) */
+
+    /* Couleurs de bordure */
+    --color-border: 220 220 220;
+    /* Bordure subtile */
+    --color-border-hover: 16 100 102;
+    /* Bordure au survol - couleur principale */
+    --color-border-focus: 16 100 102;
+    /* Bordure au focus - couleur principale #106466 */
+
+    /* Couleurs primaires (accent) - Couleur Principale Nythy */
+    --color-primary: 16 100 102;
+    /* #106466 - Couleur principale Nythy */
+    --color-primary-hover: 12 80 82;
+    /* Version plus foncée de la principale */
+    --color-primary-foreground: 255 255 255;
+    /* Texte blanc sur fond principal */
+
+    /* Couleurs secondaires - Variations de la principale */
+    --color-secondary: 20 120 122;
+    /* Version plus claire de la principale */
+    --color-secondary-hover: 16 100 102;
+    /* Couleur principale */
+    --color-secondary-foreground: 255 255 255;
+
+    /* États */
+    --color-success: 34 197 94;
+    /* Vert pour succès */
+    --color-error: 239 68 68;
+    /* Rouge pour erreurs */
+    --color-warning: 251 146 60;
+    /* Orange pour avertissements */
+    --color-info: 16 100 102;
+    /* Couleur principale pour informations */
+
+    /* Ombres */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  }
+
+  /* ===== THÈME SOMBRE AUTOMATIQUE (détection système) ===== */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Couleurs de surface inversées */
+      --color-surface: 1 14 14;
+      /* #010e0e - Sombre Nythy */
+      --color-surface-muted: 10 25 25;
+      /* Légèrement plus clair que sombre */
+      --color-surface-inverse: 245 245 245;
+      /* #F5F5F5 - Clair pour contraste */
+      --color-surface-elevated: 15 30 30;
+      /* Surface élevée légèrement plus claire */
+      --color-surface-overlay: 255 255 255;
+      /* Overlay clair en mode sombre */
+
+      /* Couleurs de texte inversées */
+      --color-foreground: 245 245 245;
+      /* #F5F5F5 - Texte principal clair */
+      --color-foreground-muted: 180 190 190;
+      /* Texte secondaire - gris moyen */
+      --color-foreground-subtle: 120 130 130;
+      /* Texte tertiaire - plus foncé */
+      --color-foreground-inverse: 1 14 14;
+      /* Texte inversé (sombre) */
+
+      /* Couleurs de bordure adaptées */
+      --color-border: 30 45 45;
+      /* Bordure subtile en mode sombre */
+      --color-border-hover: 20 120 122;
+      /* Bordure au survol - version claire de la principale */
+      --color-border-focus: 20 120 122;
+      /* Bordure au focus - version claire */
+
+      /* Couleurs primaires ajustées pour mode sombre */
+      --color-primary: 20 120 122;
+      /* Version plus claire de #106466 pour meilleur contraste */
+      --color-primary-hover: 25 140 142;
+      /* Version encore plus claire au survol */
+      --color-primary-foreground: 1 14 14;
+      /* Texte sombre sur fond principal clair */
+
+      /* Couleurs secondaires ajustées */
+      --color-secondary: 30 150 152;
+      /* Version plus vive pour mode sombre */
+      --color-secondary-hover: 20 120 122;
+      /* Version principale */
+      --color-secondary-foreground: 1 14 14;
+
+      /* États avec meilleur contraste */
+      --color-success: 74 222 128;
+      /* Vert plus clair */
+      --color-error: 248 113 113;
+      /* Rouge plus clair */
+      --color-warning: 251 191 36;
+      /* Orange plus clair */
+      --color-info: 20 120 122;
+      /* Couleur principale claire */
+
+      /* Ombres plus prononcées en mode sombre */
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+    }
+  }
+
+  /* ===== STYLES GLOBAUX ===== */
+  * {
+    border-color: rgb(var(--color-border));
+    font-family: inherit;
+  }
+
+  /* Transitions fluides pour le changement de thème */
+  /* Style 1: Transition douce et élégante (bounce subtil) */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-duration: 800ms;
+  }
+
+  /* Style alternatif: décommenter pour essayer
+  
+  /* Style 2: Transition rapide et dynamique
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transition-duration: 600ms;
+  }
+  */
+
+  /* Style 3: Transition progressive et naturelle
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition-duration: 1000ms;
+  }
+  */
+
+  /* Style 4: Transition avec effet de rebond
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition-duration: 700ms;
+  }
+  */
+
+  /* Style 5: Transition ultra-douce (recommandé pour UX professionnelle)
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+    transition-duration: 900ms;
+  }
+  */
+
+  body {
+    background-color: rgb(var(--color-surface));
+    color: rgb(var(--color-foreground));
+    font-family: var(--font-bebas-neue), system-ui, arial, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    line-height: 1.6;
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Amélioration de la lisibilité */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: rgb(var(--color-foreground));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Styles pour les sélections de texte */
+  ::selection {
+    background-color: rgb(var(--color-primary) / 0.2);
+    color: rgb(var(--color-foreground));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Scrollbar personnalisée */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgb(var(--color-surface-muted));
+    transition: background 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-border-hover));
+    border-radius: 6px;
+    transition: background 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-foreground-muted));
+  }
+
+  /* Scrollbar adaptée au thème système */
+  @media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-thumb {
+      background: rgb(var(--color-border));
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgb(var(--color-border-hover));
+    }
+
+    /* Logo NYTHY en blanc en mode sombre */
+    .logo-nythy {
+      color: rgb(255 255 255);
+    }
+  }
+
+  /* Scrollbar personnalisée pour les conteneurs internes */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-border));
+    border-radius: 4px;
+    transition: background 200ms ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-border-hover));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgb(var(--color-border));
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgb(var(--color-border-hover));
+    }
+  }
+}
+
+/**
+ * ========================================
+ * CONFIGURATION DES CLASSES TAILWIND
+ * ========================================
+ * Les classes Tailwind utilisent directement les variables CSS définies ci-dessus
+ */
+
+/* Configuration des couleurs personnalisées pour Tailwind - utilisation directe des variables */
+
+/**
+ * ========================================
+ * CONFIGURATION DE LA POLICE BEBAS NEUE
+ * ========================================
+ */
+
+@layer base {
+  :root {
+    --font-sans: var(--font-bebas-neue), system-ui, arial, sans-serif;
+  }
+}
+
+/**
+ * ========================================
+ * CLASSES UTILITAIRES PERSONNALISÉES
+ * ========================================
+ */
+
+@layer utilities {
+
+  /* ===== COULEURS DE SURFACE ===== */
+  .bg-surface {
+    background-color: rgb(var(--color-surface));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-surface-muted {
+    background-color: rgb(var(--color-surface-muted));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-surface-inverse {
+    background-color: rgb(var(--color-surface-inverse));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-surface-elevated {
+    background-color: rgb(var(--color-surface-elevated));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== COULEURS DE TEXTE ===== */
+  .text-foreground {
+    color: rgb(var(--color-foreground));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-foreground-muted {
+    color: rgb(var(--color-foreground-muted));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-foreground-subtle {
+    color: rgb(var(--color-foreground-subtle));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-foreground-inverse {
+    color: rgb(var(--color-foreground-inverse));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== COULEURS DE BORDURE ===== */
+  .border-border {
+    border-color: rgb(var(--color-border));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-border-hover {
+    border-color: rgb(var(--color-border-hover));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-border-focus {
+    border-color: rgb(var(--color-border-focus));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .hover\:bg-border:hover {
+    background-color: rgb(var(--color-border));
+  }
+
+  /* ===== COULEURS PRIMAIRES ===== */
+  .bg-primary {
+    background-color: rgb(var(--color-primary));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-primary-hover {
+    background-color: rgb(var(--color-primary-hover));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .hover\:bg-primary-hover:hover {
+    background-color: rgb(var(--color-primary-hover));
+  }
+
+  .text-primary {
+    color: rgb(var(--color-primary));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-primary-foreground {
+    color: rgb(var(--color-primary-foreground));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .from-primary {
+    --tw-gradient-from: rgb(var(--color-primary)) var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(var(--color-primary) / 0) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+
+  .ring-primary {
+    --tw-ring-color: rgb(var(--color-primary));
+  }
+
+  .ring-offset-surface {
+    --tw-ring-offset-color: rgb(var(--color-surface));
+  }
+
+  /* ===== COULEURS SECONDAIRES ===== */
+  .bg-secondary {
+    background-color: rgb(var(--color-secondary));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-secondary-hover {
+    background-color: rgb(var(--color-secondary-hover));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .hover\:bg-secondary-hover:hover {
+    background-color: rgb(var(--color-secondary-hover));
+  }
+
+  .text-secondary {
+    color: rgb(var(--color-secondary));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-secondary-foreground {
+    color: rgb(var(--color-secondary-foreground));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .to-secondary {
+    --tw-gradient-to: rgb(var(--color-secondary)) var(--tw-gradient-to-position);
+  }
+
+  /* ===== COULEURS D'ÉTAT ===== */
+  .bg-success {
+    background-color: rgb(var(--color-success));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-success {
+    color: rgb(var(--color-success));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-success {
+    border-color: rgb(var(--color-success));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-error {
+    background-color: rgb(var(--color-error));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-error {
+    color: rgb(var(--color-error));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-error {
+    border-color: rgb(var(--color-error));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-warning {
+    background-color: rgb(var(--color-warning));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-warning {
+    color: rgb(var(--color-warning));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-warning {
+    border-color: rgb(var(--color-warning));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bg-info {
+    background-color: rgb(var(--color-info));
+    transition: background-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .text-info {
+    color: rgb(var(--color-info));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .border-info {
+    border-color: rgb(var(--color-info));
+    transition: border-color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== TRANSITIONS FLUIDES ===== */
+  .transition-colors-smooth {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+
+  /* Logo NYTHY - Primaire en clair, blanc en sombre */
+  .logo-nythy {
+    color: rgb(var(--color-primary));
+    transition: color 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== OMBRES PERSONNALISÉES ===== */
+  .shadow-custom-sm {
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .shadow-custom-md {
+    box-shadow: var(--shadow-md);
+    transition: box-shadow 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .shadow-custom-lg {
+    box-shadow: var(--shadow-lg);
+    transition: box-shadow 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .shadow-custom-xl {
+    box-shadow: var(--shadow-xl);
+    transition: box-shadow 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== ANIMATIONS POUR HERO SECTION ===== */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in-down {
+    from {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in-left {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fade-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes rotate-in {
+    from {
+      opacity: 0;
+      transform: rotate(-5deg) scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: rotate(0) scale(1);
+    }
+  }
+
+  @keyframes scroll-indicator {
+
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    50% {
+      transform: translateY(8px);
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes pulse-slow {
+
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.5;
+      transform: scale(1.1);
+    }
+  }
+
+  @keyframes scroll-commerce {
+    0% {
+      transform: translateX(0);
+    }
+
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out both;
+    will-change: opacity, transform;
+  }
+
+  .animate-scroll-indicator {
+    animation: scroll-indicator 2s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 4s ease-in-out infinite;
+  }
+
+  .animate-scroll-commerce {
+    animation: scroll-commerce 20s linear infinite;
+    will-change: transform;
+  }
+
+  .animate-scroll-commerce:hover {
+    animation-play-state: paused;
+  }
+
+  .animation-delay-0 {
+    animation-delay: 0ms;
+  }
+
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animation-delay-150 {
+    animation-delay: 150ms;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  .animation-delay-700 {
+    animation-delay: 700ms;
+  }
+
+  .animation-delay-1000 {
+    animation-delay: 1000ms;
+  }
+
+  /* ===== CLASSES D'ANIMATION AU SCROLL ===== */
+  .animate-fade-in-down {
+    animation: fade-in-down 0.8s ease-out forwards;
+  }
+
+  .animate-fade-in-left {
+    animation: fade-in-left 0.8s ease-out forwards;
+  }
+
+  .animate-fade-in-right {
+    animation: fade-in-right 0.8s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.6s ease-out forwards;
+  }
+
+  .animate-rotate-in {
+    animation: rotate-in 0.8s ease-out forwards;
+  }
+
+  /* Délais d'animation supplémentaires */
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  .animation-delay-700 {
+    animation-delay: 700ms;
+  }
+
+  .animation-delay-800 {
+    animation-delay: 800ms;
+  }
+
+  /* Effet parallax */
+  .parallax-slow {
+    will-change: transform;
+    transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  /* Parallax avec offset dynamique via attribut data-* */
+  .parallax-element {
+    transform: translateY(calc(var(--parallax-offset, 0px)));
+  }
+
+  /* Valeurs prédéfinies pour le parallax (évite les styles inline) */
+  .parallax-element[data-parallax-offset="-100"] { --parallax-offset: -100px; }
+  .parallax-element[data-parallax-offset="-90"] { --parallax-offset: -90px; }
+  .parallax-element[data-parallax-offset="-80"] { --parallax-offset: -80px; }
+  .parallax-element[data-parallax-offset="-70"] { --parallax-offset: -70px; }
+  .parallax-element[data-parallax-offset="-60"] { --parallax-offset: -60px; }
+  .parallax-element[data-parallax-offset="-50"] { --parallax-offset: -50px; }
+  .parallax-element[data-parallax-offset="-40"] { --parallax-offset: -40px; }
+  .parallax-element[data-parallax-offset="-30"] { --parallax-offset: -30px; }
+  .parallax-element[data-parallax-offset="-20"] { --parallax-offset: -20px; }
+  .parallax-element[data-parallax-offset="-10"] { --parallax-offset: -10px; }
+  .parallax-element[data-parallax-offset="0"] { --parallax-offset: 0px; }
+  .parallax-element[data-parallax-offset="10"] { --parallax-offset: 10px; }
+  .parallax-element[data-parallax-offset="20"] { --parallax-offset: 20px; }
+  .parallax-element[data-parallax-offset="30"] { --parallax-offset: 30px; }
+  .parallax-element[data-parallax-offset="40"] { --parallax-offset: 40px; }
+  .parallax-element[data-parallax-offset="50"] { --parallax-offset: 50px; }
+  .parallax-element[data-parallax-offset="60"] { --parallax-offset: 60px; }
+  .parallax-element[data-parallax-offset="70"] { --parallax-offset: 70px; }
+  .parallax-element[data-parallax-offset="80"] { --parallax-offset: 80px; }
+  .parallax-element[data-parallax-offset="90"] { --parallax-offset: 90px; }
+  .parallax-element[data-parallax-offset="100"] { --parallax-offset: 100px; }
+
+  /* ===== HERO SECTION STYLES ===== */
+  .hero-text-shadow {
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ===== SLIDER STYLES ===== */
+  .slider-container {
+    transform: translateX(calc(var(--slide-index, 0) * -100%));
+  }
+
+  /* Positions prédéfinies pour le slider (évite les styles inline) */
+  .slider-container[data-slide-index="0"] { --slide-index: 0; }
+  .slider-container[data-slide-index="1"] { --slide-index: 1; }
+  .slider-container[data-slide-index="2"] { --slide-index: 2; }
+  .slider-container[data-slide-index="3"] { --slide-index: 3; }
+  .slider-container[data-slide-index="4"] { --slide-index: 4; }
+  .slider-container[data-slide-index="5"] { --slide-index: 5; }
+  .slider-container[data-slide-index="6"] { --slide-index: 6; }
+  .slider-container[data-slide-index="7"] { --slide-index: 7; }
+  .slider-container[data-slide-index="8"] { --slide-index: 8; }
+  .slider-container[data-slide-index="9"] { --slide-index: 9; }
+  .slider-container[data-slide-index="10"] { --slide-index: 10; }
+
+  /* ===== MEGA MENU LIQUID GLASS EFFECT ===== */
+  .liquid-glass {
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(16, 100, 102, 0.15);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(16, 100, 102, 0.12);
+    transition: all 250ms cubic-bezier(0.4, 0.0, 0.2, 1);
+    cursor: pointer;
+  }
+
+  .liquid-glass:hover {
+    background: rgba(255, 255, 255, 0.98);
+    transform: scale(1.02);
+    filter: none;
+  }
+
+  /* Dark mode variant */
+  @media (prefers-color-scheme: dark) {
+    .liquid-glass {
+      background: rgba(1, 14, 14, 0.95);
+      border: 1px solid rgba(20, 120, 122, 0.2);
+      box-shadow: 0 8px 32px rgba(20, 120, 122, 0.15);
+    }
+
+    .liquid-glass:hover {
+      background: rgba(1, 14, 14, 0.98);
+    }
+  }
+}

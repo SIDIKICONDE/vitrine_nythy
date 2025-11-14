@@ -1,0 +1,273 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // --- 🧍 Photos de profil ---
+    match /profile_photos/{fileName} {
+      allow read: if true;
+
+      allow write: if request.auth != null
+                   && (fileName == request.auth.uid + '.jpg' ||
+                       fileName == request.auth.uid + '.png' ||
+                       fileName == request.auth.uid + '.svg' ||
+                       fileName == request.auth.uid + '.webp')
+                   && fileName.matches('^[a-zA-Z0-9_-]+\\.(jpg|png|svg|webp)$')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType == 'image/svg+xml');
+
+      allow delete: if request.auth != null
+                    && (fileName == request.auth.uid + '.jpg' ||
+                        fileName == request.auth.uid + '.png' ||
+                        fileName == request.auth.uid + '.svg' ||
+                        fileName == request.auth.uid + '.webp');
+    }
+
+    // --- 🌄 Images de fond ---
+    match /background_images/{fileName} {
+      allow read: if true;
+
+      // Permet:
+      // - {userId}.jpg / {userId}.png / {userId}.webp (image de fond normale)
+      // - {userId}_collapsed.jpg / {userId}_collapsed.png / {userId}_collapsed.webp (image de fond en mode réduit)
+      allow write: if request.auth != null
+                   && (fileName == request.auth.uid + '.jpg' ||
+                       fileName == request.auth.uid + '.png' ||
+                       fileName == request.auth.uid + '.webp' ||
+                       fileName == request.auth.uid + '_collapsed.jpg' ||
+                       fileName == request.auth.uid + '_collapsed.png' ||
+                       fileName == request.auth.uid + '_collapsed.webp')
+                   && fileName.matches('^[a-zA-Z0-9_-]+(_collapsed)?\\.(jpg|png|webp)$')
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && (fileName == request.auth.uid + '.jpg' ||
+                        fileName == request.auth.uid + '.png' ||
+                        fileName == request.auth.uid + '.webp' ||
+                        fileName == request.auth.uid + '_collapsed.jpg' ||
+                        fileName == request.auth.uid + '_collapsed.png' ||
+                        fileName == request.auth.uid + '_collapsed.webp');
+    }
+
+    // --- 🖼️ Images des posts ---
+    match /posts/{fileName} {
+      allow read: if true;
+
+      allow write: if request.auth != null
+                   && fileName.matches(request.auth.uid + '_[a-zA-Z0-9_-]+\\.(jpg|png|jpeg|svg|webp)$')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType == 'image/svg+xml');
+
+      allow delete: if request.auth != null
+                    && fileName.matches(request.auth.uid + '_[a-zA-Z0-9_-]+\\.(jpg|png|jpeg|svg|webp)$');
+    }
+
+    // --- 🎥 Vidéos des posts ---
+    match /posts/videos/{fileName} {
+      allow read: if true;
+
+      allow write: if request.auth != null
+                   && fileName.matches(request.auth.uid + '_[a-zA-Z0-9_-]+\\.(mp4|mov|avi)$')
+                   && request.resource.size < 100 * 1024 * 1024
+                   && request.resource.contentType.matches('video/.*');
+
+      allow delete: if request.auth != null
+                    && fileName.matches(request.auth.uid + '_[a-zA-Z0-9_-]+\\.(mp4|mov|avi)$');
+    }
+
+    // --- 💬 Fichiers de messagerie ---
+    // Images dans messages/{conversationId}/{fileName}
+    // ✨ Pas de limite de taille - WebP compresse automatiquement (60-80% réduction)
+    match /messages/{conversationId}/{fileName} {
+      // Lecture : tous les utilisateurs authentifiés (filtrage des participants côté backend/app)
+      allow read: if request.auth != null;
+
+      // Écriture : utilisateurs authentifiés
+      // Uniquement pour les images (WebP compresse déjà les images de 60-80%)
+      // Format: {userId}_{timestamp}.jpg/.png/.jpeg/.webp
+      allow write: if request.auth != null
+                   && conversationId.matches('^[a-zA-Z0-9_-]+$')
+                   && fileName.matches('^[a-zA-Z0-9_-]+\\.(jpg|png|jpeg|webp)$')
+                   && request.resource.contentType.matches('image/.*');
+
+      // Suppression : utilisateur authentifié (vérifie qu'il est participant via l'app)
+      allow delete: if request.auth != null;
+    }
+
+    // --- 📎 Documents de messagerie ---
+    // Fichiers dans messages/{conversationId}/files/{fileName}
+    // ❌ Les vidéos sont INTERDITES
+    match /messages/{conversationId}/files/{fileName} {
+      // Lecture : tous les utilisateurs authentifiés (filtrage des participants côté backend/app)
+      allow read: if request.auth != null;
+
+      // Écriture : utilisateurs authentifiés
+      // Format: {userId}_{timestamp}.{extension}
+      // Extensions autorisées : documents, archives, audio, images, texte, fichiers chiffrés (.enc)
+      // Formats audio supportés : MP3, WAV, OGG (Opus), M4A (AAC), AAC, FLAC
+      // 🎤 Opus/OGG (.ogg) : Format utilisé pour les messages vocaux améliorés (codec Opus dans conteneur OGG)
+      // MAX 50MB par fichier (sauf audio : 10MB max)
+      allow write: if request.auth != null
+                   && conversationId.matches('^[a-zA-Z0-9_-]+$')
+                   && fileName.matches('^[a-zA-Z0-9_-]+\\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf|odt|ods|odp|zip|rar|7z|tar|gz|jpg|jpeg|png|gif|bmp|svg|mp3|wav|ogg|m4a|aac|flac|csv|json|xml|enc)$')
+                   && (
+                        // Audio (y compris Opus/OGG .ogg et fichiers chiffrés .enc) : MAX 10MB (messages vocaux)
+                        ((fileName.matches('.*\\.(mp3|wav|ogg|m4a|aac|flac|enc)$')) && request.resource.size < 10 * 1024 * 1024) ||
+                        // Autres fichiers : MAX 50MB
+                        (!fileName.matches('.*\\.(mp3|wav|ogg|m4a|aac|flac|enc)$') && request.resource.size < 50 * 1024 * 1024)
+                   )
+                   && (
+                        // Documents Office
+                        request.resource.contentType.matches('application/pdf') ||
+                        request.resource.contentType.matches('application/msword') ||
+                        request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*') ||
+                        request.resource.contentType.matches('application/vnd.ms-excel') ||
+                        request.resource.contentType.matches('application/vnd.ms-powerpoint') ||
+                        // Archives
+                        request.resource.contentType.matches('application/zip') ||
+                        request.resource.contentType.matches('application/x-rar-compressed') ||
+                        request.resource.contentType.matches('application/x-7z-compressed') ||
+                        request.resource.contentType.matches('application/x-tar') ||
+                        request.resource.contentType.matches('application/gzip') ||
+                        // Images
+                        request.resource.contentType.matches('image/.*') ||
+                        // Audio (inclut audio/ogg pour Opus/OGG, audio/mp4 pour M4A, audio/mpeg pour MP3, etc.)
+                        request.resource.contentType.matches('audio/.*') ||
+                        // Fichiers chiffrés (audio chiffré, y compris Opus/OGG chiffré) : application/octet-stream
+                        request.resource.contentType.matches('application/octet-stream') ||
+                        // Texte
+                        request.resource.contentType.matches('text/.*') ||
+                        // Autres
+                        request.resource.contentType.matches('application/json') ||
+                        request.resource.contentType.matches('application/xml') ||
+                        request.resource.contentType.matches('text/csv') ||
+                        // ✅ FIX: Accepte aussi null contentType (certains fichiers)
+                        request.resource.contentType == null
+                      )
+                   && !fileName.matches('.*\\.(mp4|mov|avi|mkv|wmv|flv|webm|m4v|3gp|ogv)$'); // ❌ Bloquer explicitement les vidéos (ogv = OGG vidéo, pas audio)
+
+      // Suppression : utilisateur authentifié (vérifie qu'il est participant via l'app)
+      allow delete: if request.auth != null;
+    }
+
+    // --- 👥 Photos de groupe ---
+    match /group_photos/{fileName} {
+      // Lecture : tous les utilisateurs authentifiés
+      allow read: if request.auth != null;
+
+      // Écriture : tous les utilisateurs authentifiés
+      // Format: {groupId}_{timestamp}.webp ou .jpg
+      // TODO: Vérifier que l'utilisateur est membre/admin du groupe via Firestore
+      allow write: if request.auth != null
+                   && fileName.matches('^[a-zA-Z0-9_-]+\\.(jpg|png|jpeg|webp)$')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      // Suppression : tous les utilisateurs authentifiés
+      // TODO: Limiter aux admins du groupe
+      allow delete: if request.auth != null;
+    }
+
+    // --- 🏪 Images commerçants (logo, galerie, produits) ---
+    // Stockage par UID pour vérifier simplement la propriété côté règles
+    // Chemins utilisés par l'app:
+    // - merchants/{uid}/logo/{fileName}
+    // - merchants/{uid}/gallery/{fileName}
+    // - merchants/{uid}/products/{any_depth}/{fileName}
+    match /merchants/{uid}/{path=**} {
+      // Lecture publique pour tous (pour affichage web/app)
+      allow read: if true;
+      
+      // Écriture : uniquement par le propriétaire
+      // Accepte : JPG, PNG, JPEG, WebP et SVG
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType == 'image/svg+xml');
+      
+      // Suppression : uniquement par le propriétaire
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // --- 🎫 Screenshots de support client ---
+    match /support_screenshots/{userId}/{ticketId}/{fileName} {
+      // Lecture : uniquement par le propriétaire et les admins
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      // Écriture : uniquement par le propriétaire
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && fileName.matches('^[0-9]+\\.jpg$')
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      // Suppression : uniquement par le propriétaire
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // --- 📢 Images des annonces (Admin uniquement) ---
+    match /announcements/{fileName} {
+      // Lecture publique pour tous
+      allow read: if true;
+
+      // Écriture : uniquement par les administrateurs
+      // Format: {userId}_{timestamp}.jpg ou .webp
+      // Vérifie si l'utilisateur est admin dans Firestore
+      allow write: if request.auth != null
+                   && (
+                       // Option 1: Custom claim admin
+                       request.auth.token.admin == true ||
+                       // Option 2: Document dans collection admins
+                       firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid)) ||
+                       // Option 3: Champ role='admin' dans users
+                       firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                   )
+                   && fileName.matches('^[a-zA-Z0-9_-]+_[0-9]+\\.(jpg|png|jpeg|webp)$')
+                   && request.resource.size < 10 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType == 'image/svg+xml' ||
+                       request.resource.contentType == 'image/webp');
+
+      // Suppression : uniquement par les administrateurs
+      allow delete: if request.auth != null
+                    && (
+                        // Option 1: Custom claim admin
+                        request.auth.token.admin == true ||
+                        // Option 2: Document dans collection admins
+                        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid)) ||
+                        // Option 3: Champ role='admin' dans users
+                        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                    );
+    }
+
+    // --- 📖 Stories (images et vidéos) ---
+    match /stories/{userId}/{fileName} {
+      // Lecture publique pour tous (stories visibles par tous les utilisateurs)
+      allow read: if true;
+
+      // Écriture : uniquement par le propriétaire dans son propre dossier
+      // Formats acceptés : jpg, jpeg, png, webp (images) et mp4, mov, avi (vidéos)
+      // Limite : 50 MB par fichier (pour permettre vidéos courtes)
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && fileName.matches('^[a-zA-Z0-9_-]+\\.(jpg|jpeg|png|webp|mp4|mov|avi)$')
+                   && request.resource.size < 50 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType.matches('video/.*'));
+
+      // Suppression : uniquement par le propriétaire
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // --- 🚫 Bloquer tout le reste ---
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

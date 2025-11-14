@@ -1,0 +1,1319 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================
+    // 1. FONCTIONS UTILITAIRES - AUTHENTIFICATION
+    // =========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function currentUserId() {
+      return request.auth != null ? request.auth.uid : null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+
+    // =========================================
+    // 2. FONCTIONS UTILITAIRES - RÔLES
+    // =========================================
+
+    function isAdmin() {
+      return isAuthenticated() && (
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'
+      );
+    }
+
+    function getUserRole() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(currentUserId()))
+             ? get(/databases/$(database)/documents/users/$(currentUserId())).data.get('role', 'user')
+             : 'guest';
+    }
+
+    function hasRole(role) {
+      return isAuthenticated() && getUserRole() == role;
+    }
+
+    function isModerator() {
+      return hasRole('moderator');
+    }
+
+    function isStoreOwner() {
+      return hasRole('storeOwner');
+    }
+
+    function isVerified() {
+      return isAuthenticated() && (hasRole('verified') || isStoreOwner() || isModerator() || isAdmin());
+    }
+
+    function isBanned() {
+      let userPath = /databases/$(database)/documents/users/$(currentUserId());
+      return isAuthenticated() &&
+             exists(userPath) &&
+             (get(userPath).data.get('isBanned', false) ||
+              get(userPath).data.get('isSuspended', false));
+    }
+
+    // Fonction pour vérifier si un marchand est vérifié
+    function isMerchantVerified(merchantId) {
+      let merchantPath = /databases/$(database)/documents/merchants/$(merchantId);
+      return exists(merchantPath) && 
+             get(merchantPath).data.get('isVerified', false) == true &&
+             get(merchantPath).data.get('isActive', true) == true;
+    }
+
+    // Fonction pour vérifier si l'utilisateur est propriétaire d'un marchand
+    function isMerchantOwner(merchantId) {
+      let merchantPath = /databases/$(database)/documents/merchants/$(merchantId);
+      return isAuthenticated() &&
+             exists(merchantPath) &&
+             (get(merchantPath).data.get('owner_user_id', '') == currentUserId() ||
+              get(merchantPath).data.get('ownerUserId', '') == currentUserId());
+    }
+
+    // =========================================
+    // 3. FONCTIONS VALIDATION - CONTENU
+    // =========================================
+
+    function isValidContent(content) {
+      return content is string && content.size() > 0 && content.size() <= 2000;
+    }
+
+    function isPublicPost(postData) {
+      return postData.get('isPrivate', false) == false;
+    }
+
+    function _canReadPost(postData) {
+      return isPublicPost(postData) ||
+             (isAuthenticated() && isVerified()) ||
+             isModerator() ||
+             isAdmin();
+    }
+
+
+    function _validateRepostContent(data) {
+      return data.isRepost == true &&
+             data.originalPostId is string &&
+             data.originalPostId.size() > 0 &&
+             exists(/databases/$(database)/documents/posts/$(data.originalPostId)) &&
+             _canReadPost(get(/databases/$(database)/documents/posts/$(data.originalPostId)).data) &&
+             get(/databases/$(database)/documents/posts/$(data.originalPostId)).data.authorId != currentUserId() &&  // Interdire l'auto-republication
+             data.authorId == currentUserId() &&  // L'auteur du repost doit être l'utilisateur actuel
+             (!(data.keys().hasAny(['repostContent'])) ||
+              (data.repostContent is string &&
+               data.repostContent.size() <= 500));
+    }
+
+
+
+
+    function isValidUserData() {
+      return request.resource.data.keys().hasAll(['id', 'email', 'displayName']) &&
+             request.resource.data.id == request.auth.uid &&
+             request.resource.data.email is string &&
+             request.resource.data.displayName is string;
+    }
+
+    // =========================================
+    // 4. FONCTIONS MESSAGING
+    // =========================================
+
+    function msgGetUserId() {
+      return request.auth != null ? request.auth.uid : null;
+    }
+
+    function msgIsParticipant(conversationData) {
+      return msgGetUserId() in conversationData.participantIds;
+    }
+
+    function msgIsConversationAdmin(conversationData) {
+      return (conversationData.keys().hasAny(['adminIds']) && msgGetUserId() in conversationData.adminIds) ||
+             (conversationData.keys().hasAny(['createdBy']) && msgGetUserId() == conversationData.createdBy);
+    }
+
+    function msgIsValidMessage(messageData) {
+      return messageData.keys().hasAll(['conversationId','senderId','content','createdAt','status']) &&
+             messageData.senderId == msgGetUserId() &&
+             messageData.content is string &&
+             messageData.content.size() > 0 &&
+             messageData.content.size() <= 5000 &&
+             messageData.createdAt is timestamp;
+    }
+
+    function msgIsPrivate(data) {
+      return data.type == 'private';
+    }
+
+    function msgIsGroup(data) {
+      return data.type == 'group';
+    }
+
+    function msgIsValidConversationCreate(data) {
+      return data.keys().hasAll(['participantIds','type','createdAt']) &&
+             (data.type in ['private','group','direct','channel']) &&
+             msgGetUserId() in data.participantIds &&
+             (((msgIsPrivate(data) || data.type == 'direct') && data.participantIds.size() == 2) ||
+              (msgIsGroup(data) && data.participantIds.size() >= 1) ||
+              (data.type == 'channel' && data.participantIds.size() >= 1)) &&
+             data.participantIds.size() <= 1024 &&
+             data.createdAt is timestamp &&
+             (!msgIsGroup(data) || !data.keys().hasAny(['adminIds']) ||
+              (data.adminIds is list && (msgGetUserId() in data.adminIds)));
+    }
+
+    // =========================================
+    // 5. GESTION DES UTILISATEURS
+    // =========================================
+
+    match /users/{userId} {
+      // ⚡ FIX: Autoriser la lecture pour la recherche d'utilisateurs
+      // Tous les utilisateurs authentifiés peuvent lire les profils (pour la recherche, mentions, etc.)
+      // Les champs sensibles (email, phone, etc.) ne sont pas dans cette collection
+      allow read: if isAuthenticated();
+      
+      // Lister tous les utilisateurs : seulement pour les admins (éviter les abus)
+      allow list: if isAdmin();
+      
+      allow create: if isAuthenticated() &&
+                       (request.auth.uid == userId ||
+                        request.resource.data.get('isTestUser', false) == true) &&
+                       (request.resource.data.get('isTestUser', false) == true ||
+                        isValidUserData());
+      allow update: if isOwner(userId) &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(['id', 'createdAt', 'email']);
+      allow delete: if false;
+    }
+
+    match /profiles/{userId} {
+      // Lecture : utilisateurs authentifiés (pour voir les profils publics)
+      allow read: if isAuthenticated();
+      // Liste : utilisateurs authentifiés (requêtes filtrées côté client)
+      allow list: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);  // L'utilisateur peut supprimer son propre profil
+    }
+
+    match /privacy_settings/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/public {
+      allow read: if resource.data.get('profileIsPublic', false) == true;
+      allow write: if isOwner(userId);
+    }
+
+    match /users/{userId}/ecoStats {
+      allow read: if resource.data.get('shareEcoStats', false) == true;
+      allow write: if isOwner(userId);
+    }
+
+    // Statistiques de messages non lus
+    match /users/{userId}/stats/unreadSummary {
+      // ⚡ SÉCURITÉ CRITIQUE : Seulement l'utilisateur peut lire ses stats
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // ⚠️ IMPORTANT : Les écritures sont UNIQUEMENT via Cloud Functions
+      allow write: if false;
+    }
+
+    match /user_mfa_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // =========================================
+    // 6. SESSIONS & AUTHENTIFICATION
+    // =========================================
+
+    match /user_sessions/{sessionId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /auth_logs/{logId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /password_reset_tokens/{tokenId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /key_escrow/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // =========================================
+    // 7. MESSAGING SYSTÈME
+    // =========================================
+
+    match /conversations/{conversationId} {
+      // 🔓 DEV MODE: ACCÈS TOTAL SANS RESTRICTIONS pour conversations
+      // ⚠️ Tout le monde peut lire, créer, modifier, supprimer
+      allow read, write: if true;
+
+      match /messages/{messageId} {
+        // 🔓 DEV MODE: ACCÈS TOTAL SANS RESTRICTIONS pour messages
+        // ⚠️ Tout le monde peut lire, créer, modifier, supprimer
+        allow read, write: if true;
+      }
+
+      match /typing/{userId} {
+        // 🔓 DEV MODE: ACCÈS TOTAL SANS RESTRICTIONS pour typing
+        // ⚠️ Tout le monde peut lire, créer, modifier, supprimer
+        allow read, write: if true;
+      }
+    }
+
+    // 🔓 DEV MODE: Règle pour collectionGroup des messages
+    match /{path=**}/messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    match /groups/{groupId} {
+      // 🔓 DEV MODE: ACCÈS TOTAL SANS RESTRICTIONS pour groups
+      // ⚠️ Tout le monde peut lire, créer, modifier, supprimer
+      allow read, write: if true;
+
+      match /members/{memberId} {
+        // 🔓 DEV MODE: ACCÈS TOTAL SANS RESTRICTIONS pour members
+        // ⚠️ Tout le monde peut lire, créer, modifier, supprimer
+        allow read, write: if true;
+      }
+    }
+
+    match /notifications/{notificationId} {
+      // Lecture : destinataire de la notification uniquement
+      allow read: if isAuthenticated() && 
+                     (currentUserId() == resource.data.recipientId ||
+                      currentUserId() == request.resource.data.recipientId);
+      // Liste : utilisateur authentifié peut voir ses notifications
+      allow list: if isAuthenticated();
+      // Mise à jour : destinataire peut marquer comme lu ou supprimer
+      allow update: if isAuthenticated() && 
+                       currentUserId() == resource.data.recipientId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['isRead', 'readAt']);
+      // Suppression : destinataire uniquement
+      allow delete: if isAuthenticated() && currentUserId() == resource.data.recipientId;
+      // Création : via Cloud Functions uniquement
+      allow create: if false;
+    }
+
+    match /notification_requests/{requestId} {
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAll(['type','recipientIds','payload','createdAt','status','conversationId','senderId']) &&
+                    request.resource.data.senderId == request.auth.uid &&
+                    request.resource.data.status == 'pending' &&
+                    exists(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)) &&
+                      request.auth.uid in get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.participantIds &&
+                      request.resource.data.recipientIds.size() > 0 &&
+                      !(request.auth.uid in request.resource.data.recipientIds);
+      allow read: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // =========================================
+    // 8. COMMUNAUTÉ & CONTENU
+    // =========================================
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.authorId == currentUserId() &&
+                       ((request.resource.data.get('isRepost', false) == false &&
+                         isValidContent(request.resource.data.get('content', '')) &&
+                         request.resource.data.get('imageUrls', []).size() <= 10 &&
+                         request.resource.data.get('hashtags', []).size() <= 20) ||
+                        (request.resource.data.get('isRepost', false) == true &&
+                         _validateRepostContent(request.resource.data)));
+      allow update: if !isBanned() && (
+                        (isOwner(resource.data.authorId) &&
+                         isValidContent(request.resource.data.get('content', ''))) ||
+                        isModerator() ||
+                        isAdmin() ||
+                        (isAuthenticated() &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount']) &&
+                         request.resource.data.commentsCount >= 0 &&
+                         (request.resource.data.commentsCount == resource.data.commentsCount + 1 ||
+                          request.resource.data.commentsCount == resource.data.commentsCount - 1))
+                      );
+      allow delete: if !isBanned() && (
+                        isOwner(resource.data.authorId) ||
+                        isModerator() ||
+                        isAdmin()
+                      );
+
+      match /comments/{commentId} {
+        // Lecture publique si le post est public; sinon, accessible aux utilisateurs authentifiés
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() &&
+                         !isBanned() &&
+                         request.resource.data.keys().hasAll(['content','authorId']) &&
+                         request.resource.data.get('content','').size() > 0 &&
+                         request.resource.data.get('content','').size() <= 1000 &&
+                         request.resource.data.authorId == currentUserId() &&
+                         request.resource.data.get('depth', 1) <= 3;
+        allow update: if !isBanned() && (
+                         isOwner(resource.data.authorId) ||
+                         (isAuthenticated() &&
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) &&
+                          request.resource.data.likesCount >= 0 &&
+                          (request.resource.data.likesCount == resource.data.likesCount + 1 ||
+                           request.resource.data.likesCount == resource.data.likesCount - 1))
+                       );
+        allow delete: if !isBanned() && (
+                          isOwner(resource.data.authorId) ||
+                          isModerator() ||
+                          isAdmin()
+                        );
+
+        match /reactions/{reactionId} {
+          // Lecture publique
+          allow read: if true;
+          allow create: if isAuthenticated() &&
+                         request.resource.data.keys().hasAll(['userId','userName','targetId','targetType','postId','type']) &&
+                         request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.type in ['like', 'love', 'helpful', 'awesome', 'wow', 'sad'];
+          allow update: if false;
+          allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+        }
+      }
+
+      match /reactions/{reactionId} {
+        allow read: if true;
+        allow create: if isAuthenticated() &&
+                         !isBanned() &&
+                         request.resource.data.keys().hasAll(['userId']) &&
+                         request.resource.data.userId == currentUserId();
+        allow delete: if isAuthenticated() && resource.data.userId == currentUserId();
+      }
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['postId', 'authorId', 'content']) &&
+                       request.resource.data.authorId == currentUserId() &&
+                       request.resource.data.content is string &&
+                       request.resource.data.content.size() > 0 &&
+                       request.resource.data.content.size() <= 1000;
+      allow update: if !isBanned() && (
+                       isOwner(resource.data.authorId) ||
+                       (isAuthenticated() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) &&
+                        request.resource.data.likesCount >= 0 &&
+                        (request.resource.data.likesCount == resource.data.likesCount + 1 ||
+                         request.resource.data.likesCount == resource.data.likesCount - 1))
+                     );
+      allow delete: if !isBanned() && (
+                        isOwner(resource.data.authorId) ||
+                        isModerator() ||
+                        isAdmin()
+                      );
+    }
+
+    match /reactions/{reactionId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['userId', 'targetId', 'targetType']) &&
+                       request.resource.data.userId == currentUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == currentUserId();
+      allow update: if false;
+    }
+
+    match /drafts/{draftId} {
+      allow read: if isOwner(resource.data.authorId);
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.authorId == currentUserId() &&
+                       request.resource.data.content.size() <= 2000;
+      allow update: if isOwner(resource.data.authorId) &&
+                       !isBanned() &&
+                       request.resource.data.authorId == currentUserId();
+      allow delete: if isOwner(resource.data.authorId) && !isBanned();
+    }
+
+    match /bookmarks/{bookmarkId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['userId', 'postId']) &&
+                       request.resource.data.userId == currentUserId() &&
+                       request.resource.data.postId is string &&
+                       exists(/databases/$(database)/documents/posts/$(request.resource.data.postId));
+      allow update: if isAuthenticated() &&
+                       isOwner(resource.data.userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['note', 'updatedAt']);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /hidden_posts/{hiddenPostId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['userId', 'postId', 'createdAt']) &&
+                       request.resource.data.userId == currentUserId() &&
+                       request.resource.data.postId is string;
+      allow update: if false;
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /follows/{followId} {
+      // TEMP: full access to diagnose client write path
+      allow read, write: if true;
+    }
+
+    match /user_reposts/{repostId} {
+      // Format du document ID: {userId}_{postId}
+      allow read: if true;  // Lecture publique pour vérifier si un utilisateur a reposté
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['userId', 'postId', 'repostId']) &&
+                       request.resource.data.userId == currentUserId() &&
+                       exists(/databases/$(database)/documents/posts/$(request.resource.data.postId));
+      allow update: if false;
+      allow delete: if isAuthenticated() &&
+                       !isBanned() &&
+                       resource.data.userId == currentUserId();
+    }
+
+    // =========================================
+    // 9. COMMERCE & TRANSACTIONS
+    // =========================================
+    // Note: Toutes les opérations WRITE (create/update/delete) pour merchants, products et offers
+    // sont gérées via Cloud Functions pour une meilleure sécurité et validation.
+    // Seule la lecture reste dans les rules pour permettre les requêtes directes.
+
+    match /stores/{storeId} {
+      allow read: if true;  // Lecture publique
+      allow write: if isAdmin();
+    }
+
+    match /merchants/{merchantId} {
+      // Lecture: Le propriétaire peut TOUJOURS lire son marchand (vérifié ou non), le public uniquement si vérifié
+      allow get: if isMerchantOwner(merchantId) || isAdmin() || isMerchantVerified(merchantId);
+      
+      // Liste: Admins peuvent tout voir, les propriétaires peuvent lister LEUR marchand
+      // ✅ Permettre les queries publiques sur les marchands vérifiés et actifs
+      allow list: if isAdmin() || 
+                       (isAuthenticated() &&
+                        (resource.data.get('owner_user_id', '') == currentUserId() ||
+                         resource.data.get('ownerUserId', '') == currentUserId())) ||
+                       // Recherche publique: uniquement marchands vérifiés et actifs
+                       (resource.data.get('isVerified', false) == true &&
+                        resource.data.get('isActive', true) == true);
+      
+      // Création: Utilisateur authentifié peut créer SON marchand (non vérifié initialement)
+      allow create: if isAuthenticated() && 
+                       (request.resource.data.get('owner_user_id', '') == currentUserId() ||
+                        request.resource.data.get('ownerUserId', '') == currentUserId());
+      
+      // Mise à jour: Propriétaire peut mettre à jour son marchand ou admin
+      allow update: if isMerchantOwner(merchantId) || isAdmin();
+      
+      // Suppression: Admins uniquement
+      allow delete: if isAdmin();
+
+      // Produits du marchand (sous-collection)
+      match /products/{productId} {
+        // Lecture: Uniquement si le marchand est vérifié OU si c'est le propriétaire/admin
+        allow read: if isMerchantVerified(merchantId) || isMerchantOwner(merchantId) || isAdmin();
+        
+        // Création/Modification/Suppression: Propriétaire du marchand uniquement
+        allow create, update, delete: if isMerchantOwner(merchantId) || isAdmin();
+      }
+
+      // Offres du marchand (sous-collection)
+      match /offers/{offerId} {
+        // Lecture: Uniquement si le marchand est vérifié OU si c'est le propriétaire/admin
+        allow read: if isMerchantVerified(merchantId) || isMerchantOwner(merchantId) || isAdmin();
+        
+        // Création/Modification/Suppression: Propriétaire du marchand uniquement
+        allow create, update, delete: if isMerchantOwner(merchantId) || isAdmin();
+      }
+
+      // Statistiques du marchand (sous-collection)
+      match /stats/{statId} {
+        allow read: if isAuthenticated() &&
+                       exists(/databases/$(database)/documents/merchants/$(merchantId)) &&
+                       get(/databases/$(database)/documents/merchants/$(merchantId)).data.owner_user_id == currentUserId();
+        allow write: if false;  // Gestion via Cloud Functions
+      }
+    }
+
+    // Collection Group queries pour les produits (recherche globale)
+    match /{path=**}/products/{productId} {
+      allow read: if true;  // Lecture publique pour recherche
+      allow write: if false;  // Gestion via Cloud Functions uniquement
+    }
+
+    // Collection racine pour les offres
+    match /offers/{offerId} {
+      allow read: if true;  // Lecture publique
+      allow list: if isAdmin();  // Admins peuvent lister toutes les offres
+      allow write: if isAdmin();  // Admins peuvent gérer les offres
+    }
+
+    // Collection Group queries pour les offres (recherche globale)
+    match /{path=**}/offers/{offerId} {
+      allow read: if true;  // Lecture publique pour recherche
+      allow write: if false;  // Gestion via Cloud Functions uniquement
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(resource.data.userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['status', 'notes', 'pickupTime', 'updatedAt']);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Événements des marchands
+    match /merchant_events/{eventId} {
+      // Lecture: Propriétaire du marchand ou admin
+      allow read: if isAuthenticated() && 
+                     (isMerchantOwner(resource.data.merchantId) || isAdmin());
+      
+      // Écriture: Backend uniquement (Cloud Functions)
+      allow write: if false;
+    }
+
+    match /orders/{orderId} {
+      // Lecture d'un document spécifique: propriétaire uniquement ou admin
+      allow get: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      // Liste/requêtes: accessible aux utilisateurs authentifiés
+      // La sécurité est assurée par le where('userId') côté client
+      // et les règles get empêchent l'accès aux documents individuels non autorisés
+      allow list: if isAuthenticated();
+      // Écritures interdites côté client (Cloud Functions admin bypasses rules)
+      allow create, update, delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                       (request.auth.uid == resource.data.userId ||
+                        request.auth.token.firebase.sign_in_provider == 'custom');
+      allow delete: if false;
+    }
+
+    match /basket_reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.userId == currentUserId() &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.pricePaid > 0 &&
+                       request.resource.data.originalValue >= request.resource.data.pricePaid;
+      allow update: if isAuthenticated() &&
+                       !isBanned() &&
+                       isOwner(resource.data.userId) &&
+                       request.time < resource.data.purchaseDate + duration.value(48, 'h');
+      allow delete: if !isBanned() && (
+                        isOwner(resource.data.userId) ||
+                        isAdmin()
+                      );
+    }
+
+    match /reviews/{reviewId} {
+      // Lecture publique pour afficher les avis
+      allow read: if true;
+      
+      // Création : utilisateur authentifié uniquement (notes étoiles uniquement)
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll([
+                         'user_id', 'merchant_id', 'merchant_name', 
+                         'rating', 'created_at', 'helpful_count'
+                       ]) &&
+                       request.resource.data.user_id == currentUserId() &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.helpful_count == 0;
+      
+      // Mise à jour : propriétaire uniquement, seule la note peut être modifiée
+      allow update: if isAuthenticated() &&
+                       !isBanned() &&
+                       isOwner(resource.data.user_id) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['rating', 'updated_at']) &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5;
+      
+      // Suppression : propriétaire ou admin
+      allow delete: if !isBanned() && (
+                        isOwner(resource.data.user_id) ||
+                        isAdmin()
+                      );
+    }
+
+    match /sponsored_posts/{postId} {
+      allow read: if true;
+      allow create: if isStoreOwner() &&
+                       !isBanned() &&
+                       request.resource.data.storeId != null;
+      allow update, delete: if (isStoreOwner() &&
+                                 request.resource.data.storeId == get(/databases/$(database)/documents/users/$(currentUserId())).data.storeId) ||
+                                isAdmin();
+    }
+
+    // =========================================
+    // 10. GAMIFICATION & ENGAGEMENT
+    // =========================================
+
+    match /challenges/{challengeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /user_challenges/{userChallengeId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.challengeId is string &&
+                       exists(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId));
+      allow update: if isAuthenticated() &&
+                       isOwner(resource.data.userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['currentProgress', 'completionPercentage', 'status', 'lastActivityAt', 'startedAt', 'completedAt', 'rewardClaimed', 'rewardClaimedAt', 'pointsEarned', 'experiencePointsEarned']);
+      allow delete: if isAuthenticated() &&
+                       (isOwner(resource.data.userId) || isAdmin());
+    }
+
+    match /leaderboards/{type} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /badges/{badgeId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // =========================================
+    // 10.1 SYSTÈME DE BATTLES (GAMIFICATION)
+    // =========================================
+
+    match /battles/{battleId} {
+      // Lecture : participants de la battle uniquement
+      allow read: if isAuthenticated() && (
+                     resource.data.player1Id == currentUserId() ||
+                     resource.data.player2Id == currentUserId() ||
+                     isAdmin()
+                  );
+
+      // Liste : utilisateur peut lister ses battles
+      allow list: if isAuthenticated();
+
+      // Création : utilisateur authentifié peut créer une battle s'il est player1
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.player1Id == currentUserId() &&
+                       request.resource.data.keys().hasAll([
+                         'player1Id', 'player2Id', 'type', 'status',
+                         'player1Score', 'player2Score', 'createdAt'
+                       ]) &&
+                       request.resource.data.status in ['pending', 'active'] &&
+                       request.resource.data.player1Score == 0 &&
+                       request.resource.data.player2Score == 0 &&
+                       request.resource.data.type in ['random', 'friend', 'revenge', 'championship'];
+
+      // Mise à jour : participants de la battle ou admin
+      allow update: if isAuthenticated() && (
+                       resource.data.player1Id == currentUserId() ||
+                       resource.data.player2Id == currentUserId() ||
+                       isAdmin()
+                     );
+
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 10.2 STATISTIQUES JOUEURS (GAMIFICATION)
+    // =========================================
+
+    match /player_stats/{playerId} {
+      // Lecture : tous les utilisateurs authentifiés (pour leaderboard, battles, etc.)
+      allow get: if isAuthenticated();
+
+      // Liste : utilisateur authentifié (pour leaderboard)
+      allow list: if isAuthenticated();
+
+      // Création : utilisateur peut créer uniquement ses propres stats
+      allow create: if isAuthenticated() && request.auth.uid == playerId;
+
+      // Mise à jour : uniquement via Cloud Functions / administrateurs
+      allow update: if isAdmin();
+
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 10.3 LEAGUES (GAMIFICATION)
+    // =========================================
+
+    match /leagues/{leagueId} {
+      // Lecture publique pour afficher les leagues
+      allow read: if isAuthenticated();
+
+      // Écriture : admin ou backend uniquement
+      allow write: if isAdmin();
+    }
+
+    // =========================================
+    // 10.4bis RÉCOMPENSES JOUEURS
+    // =========================================
+
+    match /player_rewards/{rewardId} {
+      allow read: if isAuthenticated() && resource.data.playerId == currentUserId();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================
+    // 10.4 TOURNAMENTS (GAMIFICATION)
+    // =========================================
+
+    match /tournaments/{tournamentId} {
+      // Lecture publique pour afficher les tournois
+      allow read: if isAuthenticated();
+
+      // Création : admin uniquement
+      allow create: if isAdmin();
+
+      // Mise à jour : uniquement via Cloud Functions / administrateurs
+      allow update: if isAdmin();
+
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 11. MODÉRATION & SUPPORT
+    // =========================================
+
+    // Règles pour les signalements (Reports)
+    match /reports/{reportId} {
+      // Lecture : Admins, modérateurs et le rapporteur peuvent lire
+      allow read: if isAuthenticated() && (
+                     isAdmin() || 
+                     isModerator() ||
+                     resource.data.reporterId == currentUserId()
+                  );
+
+      // Création : Tout utilisateur authentifié peut signaler du contenu
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.reporterId == currentUserId() &&
+                       request.resource.data.keys().hasAll([
+                         'reporterId', 
+                         'targetId', 
+                         'targetType', 
+                         'reason', 
+                         'description',
+                         'createdAt',
+                         'status'
+                       ]) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.targetType in ['post', 'comment', 'user', 'store'] &&
+                       request.resource.data.reason in [
+                         'spam', 
+                         'inappropriate-content', 
+                         'harassment', 
+                         'fake-information', 
+                         'violence', 
+                         'hate-speech', 
+                         'copyright', 
+                         'other'
+                       ] &&
+                       request.resource.data.description is string &&
+                       request.resource.data.description.size() >= 10 &&
+                       request.resource.data.description.size() <= 1000;
+
+      // Mise à jour : Uniquement admins et modérateurs
+      allow update: if isAuthenticated() && 
+                       !isBanned() &&
+                       (isAdmin() || isModerator()) &&
+                       // Vérifier que le statut est valide
+                       request.resource.data.status in ['pending', 'under-review', 'resolved', 'dismissed'] &&
+                       // Les champs obligatoires ne peuvent pas être modifiés
+                       request.resource.data.reporterId == resource.data.reporterId &&
+                       request.resource.data.targetId == resource.data.targetId &&
+                       request.resource.data.targetType == resource.data.targetType &&
+                       request.resource.data.reason == resource.data.reason;
+
+      // Suppression : Uniquement les admins
+      allow delete: if isAdmin();
+    }
+
+    // Logs de modération (créés automatiquement par Cloud Functions)
+    match /moderation_logs/{logId} {
+      // Lecture : Uniquement admins et modérateurs
+      allow read: if isAuthenticated() && (isAdmin() || isModerator());
+      
+      // Écriture : Uniquement via Cloud Functions (backend)
+      allow write: if false;
+    }
+
+    // Statistiques de signalements pour le dashboard admin
+    match /admin_stats/reports {
+      // Lecture : Uniquement admins et modérateurs
+      allow read: if isAuthenticated() && (isAdmin() || isModerator());
+      
+      // Écriture : Uniquement via Cloud Functions
+      allow write: if false;
+    }
+
+    match /support/{ticketId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // =========================================
+    // 12. SYSTÈME DE FAVORIS
+    // =========================================
+
+    match /favorites/{userId} {
+      // Collection des favoris par utilisateur
+      allow read: if isOwner(userId);
+      allow write: if false; // Les favoris sont gérés via sous-collections
+
+      match /userFavorites/{favoriteId} {
+        // Favoris individuels d'un utilisateur
+        allow read: if isOwner(userId);
+        allow create: if isAuthenticated() &&
+                         !isBanned() &&
+                         request.auth.uid == userId &&
+                         request.resource.data.keys().hasAll(['id', 'userId', 'type', 'itemId', 'itemName', 'addedAt']) &&
+                         request.resource.data.userId == userId &&
+                         request.resource.data.type in ['merchant', 'offer'] &&
+                         request.resource.data.itemId is string &&
+                         request.resource.data.itemId.size() > 0 &&
+                         request.resource.data.itemName is string &&
+                         request.resource.data.itemName.size() > 0 &&
+                         request.resource.data.addedAt is timestamp;
+        allow update: if isAuthenticated() &&
+                         !isBanned() &&
+                         isOwner(userId) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['notes', 'updatedAt']);
+        allow delete: if isAuthenticated() &&
+                         !isBanned() &&
+                         isOwner(userId);
+      }
+    }
+
+    // =========================================
+    // 13. ADMINISTRATION & ANALYTICS
+    // =========================================
+
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if false;  // Gestion via Cloud Functions uniquement
+    }
+
+    match /config/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /analytics/{doc} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /security_audit/{auditId} {
+      allow read, write: if false;
+    }
+
+    // =========================================
+    // SYSTÈME DE SÉCURITÉ ADMIN
+    // =========================================
+
+    // Collection des paramètres de sécurité admin
+    match /admin_security/{docId} {
+      // Lecture : tous les admins authentifiés
+      allow read: if isAdmin();
+      
+      // Écriture : système uniquement (via datasource)
+      // Les admins peuvent lire mais pas modifier directement
+      allow write: if isAdmin();
+    }
+
+    // Collection des logs d'accès admin
+    match /admin_access_logs/{logId} {
+      // Lecture : admins uniquement
+      allow read: if isAdmin();
+      
+      // Écriture : système uniquement (création automatique)
+      allow create: if isAdmin();
+      
+      // Pas de modification/suppression manuelle
+      allow update, delete: if false;
+    }
+
+    // =========================================
+    // 14. SYSTÈME DE SUPPORT
+    // =========================================
+
+    // Collection des tickets de support
+    match /support_tickets/{ticketId} {
+      // Lecture : utilisateur propriétaire ou admin
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Création : utilisateur authentifié uniquement
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll([
+                         'id', 'userId', 'userDisplayName', 'userEmail',
+                         'category', 'priority', 'status', 'subject', 'description',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       request.resource.data.category in [
+                         'bug', 'feature', 'payment', 'account', 
+                         'merchant', 'order', 'other'
+                       ] &&
+                       request.resource.data.priority in ['low', 'medium', 'high', 'urgent'] &&
+                       request.resource.data.status == 'open' &&
+                       request.resource.data.subject is string &&
+                       request.resource.data.subject.size() >= 5 &&
+                       request.resource.data.subject.size() <= 100 &&
+                       request.resource.data.description is string &&
+                       request.resource.data.description.size() >= 20 &&
+                       request.resource.data.description.size() <= 2000;
+
+      // Mise à jour : propriétaire (notation satisfaction) ou admin (tout)
+      allow update: if isAuthenticated() &&
+                       !isBanned() &&
+                       (
+                         // L'utilisateur peut noter son ticket
+                         (resource.data.userId == request.auth.uid &&
+                          request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['satisfactionRating', 'satisfactionComment', 'updatedAt'])) ||
+                         // L'admin peut tout modifier
+                         isAdmin()
+                       );
+
+      // Suppression : admin seulement
+      allow delete: if isAdmin();
+    }
+
+    // Collection FAQ (lecture publique, écriture admin)
+    match /faq/{faqId} {
+      allow read: if true; // Accessible à tous (même non authentifiés)
+      
+      // Création et suppression : admin uniquement
+      allow create, delete: if isAdmin();
+      
+      // Mise à jour : admin peut tout modifier
+      // OU utilisateur authentifié peut uniquement incrémenter viewCount et helpfulCount
+      // Note: FieldValue.increment() est une opération atomique gérée côté serveur
+      allow update: if isAdmin() ||
+                       (isAuthenticated() &&
+                        !isBanned() &&
+                        // Permettre uniquement la mise à jour de viewCount, helpfulCount et updatedAt
+                        // Les autres champs critiques ne doivent pas être modifiés
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['viewCount', 'helpfulCount', 'updatedAt']) &&
+                        // Vérifier que les autres champs restent inchangés
+                        request.resource.data.question == resource.data.question &&
+                        request.resource.data.answer == resource.data.answer &&
+                        request.resource.data.categoryId == resource.data.categoryId &&
+                        request.resource.data.isPopular == resource.data.isPopular &&
+                        request.resource.data.order == resource.data.order &&
+                        request.resource.data.tags == resource.data.tags &&
+                        request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // Collection des recommandations de commerçants
+    match /merchant_recommendations/{recommendationId} {
+      // Lecture : admin uniquement
+      allow read: if isAdmin();
+      
+      // Création : utilisateur authentifié uniquement
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll([
+                         'merchantName', 'address', 'reason',
+                         'userId', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       request.resource.data.merchantName is string &&
+                       request.resource.data.merchantName.size() > 0 &&
+                       request.resource.data.address is string &&
+                       request.resource.data.address.size() > 0 &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.reason.size() >= 20 &&
+                       request.resource.data.status == 'pending';
+      
+      // Mise à jour : admin uniquement
+      allow update: if isAdmin();
+      
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 16. MONITORING DES ERREURS - ADMIN ONLY
+    // =========================================
+
+    // Collection admin_errors (système de monitoring)
+    match /admin_errors/{errorId} {
+      // Création : n'importe quelle app authentifiée peut logger des erreurs
+      allow create: if isAuthenticated();
+      
+      // Lecture/Modification/Suppression : admin seulement
+      allow read, update, delete: if isAdmin();
+    }
+
+    // =========================================
+    // 17. SYSTÈME D'ANNONCES
+    // =========================================
+
+    match /announcements/{announcementId} {
+      // Lecture : tous les utilisateurs authentifiés
+      allow read: if isAuthenticated();
+      
+      // Création : admin uniquement
+      allow create: if isAdmin() &&
+                       request.resource.data.keys().hasAll([
+                         'id', 'title', 'message', 'type', 'createdAt',
+                         'createdBy', 'createdByName', 'status'
+                       ]) &&
+                       request.resource.data.createdBy == currentUserId() &&
+                       request.resource.data.title is string &&
+                       request.resource.data.title.size() > 0 &&
+                       request.resource.data.title.size() <= 200 &&
+                       request.resource.data.message is string &&
+                       request.resource.data.message.size() > 0 &&
+                       request.resource.data.message.size() <= 2000 &&
+                       request.resource.data.type in [
+                         'general', 'update', 'maintenance', 'event',
+                         'promotion', 'alert', 'feature'
+                       ] &&
+                       request.resource.data.status in [
+                         'draft', 'scheduled', 'sending', 'sent', 'cancelled'
+                       ];
+      
+      // Mise à jour : admin uniquement
+      // Ne peut pas modifier : id, createdAt, createdBy, createdByName
+      allow update: if isAdmin() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['id', 'createdAt', 'createdBy', 'createdByName']);
+      
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // Sous-collection pour marquer les annonces comme lues
+    match /users/{userId}/read_announcements/{announcementId} {
+      // Lecture : propriétaire uniquement
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Création : propriétaire uniquement
+      allow create: if isAuthenticated() &&
+                       isOwner(userId) &&
+                       request.resource.data.readAt is timestamp;
+      
+      // Mise à jour : propriétaire uniquement
+      allow update: if isAuthenticated() && isOwner(userId);
+      
+      // Suppression : propriétaire uniquement
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // =========================================
+    // 18. SYSTÈME DE STORIES
+    // =========================================
+
+    match /stories/{storyId} {
+      // Lecture publique : les stories sont visibles par tous
+      allow read: if true;
+      
+      // Création : utilisateur authentifié uniquement
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll([
+                         'id', 'userId', 'userName', 'userAvatarUrl',
+                         'items', 'createdAt'
+                       ]) &&
+                       request.resource.data.userId == currentUserId() &&
+                       request.resource.data.items is list &&
+                       request.resource.data.items.size() > 0 &&
+                       request.resource.data.items.size() <= 10;
+      
+      // Mise à jour : propriétaire de la story ou utilisateur authentifié (pour marquer comme vu)
+      allow update: if isAuthenticated() &&
+                       (
+                         // Le propriétaire peut tout modifier
+                         (resource.data.userId == currentUserId() && !isBanned()) ||
+                         // N'importe quel utilisateur authentifié peut marquer comme vu
+                         (request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['isViewed', 'items'])) ||
+                         // Admin peut tout modifier
+                         isAdmin()
+                       );
+      
+      // Suppression : propriétaire ou admin
+      allow delete: if !isBanned() && (
+                        resource.data.userId == currentUserId() ||
+                        isAdmin()
+                      );
+    }
+
+    // =========================================
+    // 19. CONFIGURATION SYSTÈME
+    // =========================================
+
+    // Collection de configuration (admin seulement)
+    match /config/{docId} {
+      // Lecture : tous les utilisateurs authentifiés peuvent lire
+      allow read: if isAuthenticated();
+      
+      // Écriture : admin uniquement
+      allow write: if isAdmin();
+    }
+
+    // =========================================
+    // 20. SYSTÈME DE PARRAINAGE
+    // =========================================
+
+    // Collection des codes de parrainage
+    match /referralCodes/{codeId} {
+      // Lecture : tout utilisateur authentifié peut lire les codes (pour vérification)
+      allow read: if isAuthenticated();
+      
+      // Création : utilisateur authentifié uniquement
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll(['userId', 'code', 'createdAt']) &&
+                       request.resource.data.userId == currentUserId() &&
+                       request.resource.data.code is string &&
+                       request.resource.data.code.size() >= 6 &&
+                       request.resource.data.createdAt is timestamp;
+      
+      // Mise à jour : propriétaire uniquement
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == currentUserId();
+      
+      // Suppression : propriétaire ou admin
+      allow delete: if isAuthenticated() && (
+                       resource.data.userId == currentUserId() ||
+                       isAdmin()
+                     );
+    }
+
+    // Collection des relations de parrainage
+    match /referrals/{referralId} {
+      // Lecture : parrain, filleul ou admin
+      allow read: if isAuthenticated() && (
+                     resource.data.referrerId == currentUserId() ||
+                     resource.data.refereeId == currentUserId() ||
+                     isAdmin()
+                   );
+      
+      // Création : utilisateur authentifié uniquement (via backend)
+      allow create: if isAuthenticated() &&
+                       !isBanned() &&
+                       request.resource.data.keys().hasAll([
+                         'referrerId', 'refereeId', 'referralCode',
+                         'createdAt', 'status'
+                       ]) &&
+                       request.resource.data.refereeId == currentUserId() &&
+                       request.resource.data.status == 'completed' &&
+                       request.resource.data.createdAt is timestamp;
+      
+      // Mise à jour : admin uniquement
+      allow update: if isAdmin();
+      
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 21. SYSTÈME DE PORTEFEUILLE
+    // =========================================
+
+    // Collection globale walletHistory (pour statistiques admin)
+    match /walletHistory/{transactionId} {
+      // Lecture : admins uniquement (pour calculer les statistiques de parrainage)
+      allow read: if isAdmin();
+      
+      // Liste/Requêtes : admins uniquement (avec filtres)
+      allow list: if isAdmin();
+      
+      // Écriture : uniquement via Cloud Functions
+      allow write: if false;
+    }
+
+    // Sous-collection wallet_transactions dans profiles
+    match /profiles/{userId}/wallet_transactions/{transactionId} {
+      // Lecture : propriétaire uniquement
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Liste : propriétaire uniquement
+      allow list: if isAuthenticated() && isOwner(userId);
+      
+      // Écriture : uniquement via Cloud Functions
+      allow write: if false;
+    }
+
+    // =========================================
+    // 22. SYSTÈME D'ARTICLES (BLOG/ACTUALITÉS)
+    // =========================================
+
+    match /articles/{articleId} {
+      // Lecture publique : tous les articles publiés
+      allow read: if true;
+      
+      // Liste : tous les utilisateurs peuvent lister les articles publiés
+      allow list: if true;
+      
+      // Création : admin uniquement (via backend avec Firebase Admin SDK)
+      allow create: if isAdmin();
+      
+      // Mise à jour : admin uniquement
+      allow update: if isAdmin();
+      
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // =========================================
+    // 23. RÈGLE PAR DÉFAUT - DENY ALL
+    // =========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
