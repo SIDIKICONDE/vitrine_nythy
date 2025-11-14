@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import type { ReactElement } from 'react';
-import { AnimatedSection, Parallax } from './AnimatedSection';
+import { AnimatedSection } from './AnimatedSection';
 import { Container } from './layout/Container';
 import { Section } from './layout/Section';
 
@@ -68,18 +68,16 @@ export function AboutSection(): ReactElement {
 
             {/* Image */}
             <AnimatedSection animation="fade-left" delay={400}>
-              <Parallax speed={0.2}>
-                <div className="relative h-[300px] lg:h-[400px] rounded-2xl overflow-hidden shadow-2xl">
-                  <Image
-                    src="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&h=600&fit=crop"
-                    alt="Sidiki Condé, fondateur de NYTHY"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-linear-to-t from-primary/20 to-transparent" />
-                </div>
-              </Parallax>
+              <div className="relative h-[300px] lg:h-[400px] rounded-2xl overflow-hidden shadow-2xl">
+                <Image
+                  src="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&h=600&fit=crop"
+                  alt="Sidiki Condé, fondateur de NYTHY"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-linear-to-t from-primary/20 to-transparent" />
+              </div>
             </AnimatedSection>
           </div>
         </Container>

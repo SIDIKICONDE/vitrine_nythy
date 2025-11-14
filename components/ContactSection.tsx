@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { ContactForm } from './ContactForm';
 import { Section } from './layout/Section';
 import { Container } from './layout/Container';
-import { AnimatedSection, Parallax } from './AnimatedSection';
+import { AnimatedSection } from './AnimatedSection';
 import Image from 'next/image';
 
 /**
@@ -33,18 +33,16 @@ export function ContactSection(): ReactElement {
 
           {/* Colonne droite - Image */}
           <AnimatedSection animation="fade-left" delay={400}>
-            <Parallax speed={0.15}>
-              <div className="relative h-[400px] lg:h-[600px] rounded-2xl overflow-hidden shadow-2xl">
-                <Image
-                  src="https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&h=1000&fit=crop"
-                  alt="Employée de commerce avec terminal de paiement"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-cover"
-                  priority
-                />
-              </div>
-            </Parallax>
+            <div className="relative h-[400px] lg:h-[600px] rounded-2xl overflow-hidden shadow-2xl">
+              <Image
+                src="https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&h=1000&fit=crop"
+                alt="Employée de commerce avec terminal de paiement"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover"
+                priority
+              />
+            </div>
           </AnimatedSection>
         </div>
       </Container>
