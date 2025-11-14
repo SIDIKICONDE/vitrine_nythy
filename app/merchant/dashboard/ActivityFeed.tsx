@@ -57,13 +57,14 @@ export default function ActivityFeed({ initialActivities }: ActivityFeedProps = 
         const apiActivities = await apiDashboardRepository.getActivities(merchantId);
 
         // Filtrer et convertir les activités valides
-        const activitiesWithDates = apiActivities
+        const activitiesWithDates: Activity[] = apiActivities
           .filter((activity): activity is typeof activity & { type: Activity['type'] } => {
             // Valider que le type est bien l'un des types attendus
             return ['order', 'review', 'follower', 'product'].includes(activity.type);
           })
           .map(activity => ({
             ...activity,
+            type: activity.type as Activity['type'],
             timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
           }));
 
