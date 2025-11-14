@@ -1,4 +1,4 @@
-# Vitrine - Application Web Moderne
+# Vitrine Nythy - Application Web Moderne
 
 Une application web moderne construite avec les dernières technologies web.
 
@@ -8,6 +8,7 @@ Une application web moderne construite avec les dernières technologies web.
 - **React 19** - Bibliothèque UI
 - **TypeScript** - Typage statique
 - **Tailwind CSS v4** - Framework CSS utilitaire moderne
+- **Firebase** - Backend et authentification
 - **ESLint** - Linter pour code propre
 
 ## 📦 Installation
@@ -45,10 +46,12 @@ npm start
 ## 📝 Structure du Projet
 
 ```
-vitrine nyth/
+vitrine nythy/
 ├── app/
 │   ├── layout.tsx      # Layout principal
 │   ├── page.tsx        # Page d'accueil
+│   ├── admin/         # Dashboard administrateur
+│   ├── merchant/      # Interface marchand
 │   └── globals.css     # Styles globaux
 ├── components/         # Composants React
 │   ├── layout/        # Composants de mise en page
@@ -57,6 +60,7 @@ vitrine nyth/
 │   └── ...            # Autres composants
 ├── lib/               # Utilitaires et constants
 ├── types/             # Types TypeScript
+├── firebase/          # Configuration Firebase
 ├── public/            # Fichiers statiques
 ├── package.json       # Dépendances
 └── README.md         # Documentation
@@ -67,6 +71,9 @@ vitrine nyth/
 - 🎨 Design moderne avec dégradés et effets glassmorphism
 - 📱 Responsive sur tous les appareils
 - ⚡ Performance optimisée
+- 🔐 Authentification sécurisée avec 2FA
+- 🛒 Interface marchand complète
+- 👨‍💼 Dashboard administrateur
 - 🌙 Prêt pour le mode sombre (si activé)
 - 🔧 Facile à personnaliser
 
@@ -94,6 +101,7 @@ app/
 - [Next.js Documentation](https://nextjs.org/docs)
 - [React Documentation](https://react.dev)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [Firebase Documentation](https://firebase.google.com/docs)
 
 ## 🤝 Contribution
 
@@ -101,4 +109,4 @@ N'hésitez pas à personnaliser cette application selon vos besoins !
 
 ---
 
-Créé avec ❤️ par votre équipe
+Créé avec ❤️ par l'équipe Nythy
