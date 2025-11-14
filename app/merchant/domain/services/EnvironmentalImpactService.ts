@@ -61,7 +61,7 @@ export function getDefaultEnvironmentalImpact(
     };
   }
 
-  const weight = DEFAULT_WEIGHTS[category] || DEFAULT_WEIGHTS.other;
+  const weight = DEFAULT_WEIGHTS[category] ?? DEFAULT_WEIGHTS.other;
   const co2 = calculateCo2(weight, category);
 
   return {

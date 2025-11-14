@@ -70,7 +70,7 @@ export default function RecentOrders({ initialOrders }: RecentOrdersProps = {}) 
         const ordersWithDates = apiOrders.map(order => ({
           ...order,
           createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
-        }));
+        })) as Order[];
 
         setOrders(ordersWithDates);
       } catch (error) {

@@ -4,6 +4,7 @@
  */
 
 import { Money } from '../value-objects/Money';
+import { DailyRevenue } from './FinanceSummary';
 
 export interface MerchantSalesStats {
   merchantId: string;
@@ -28,12 +29,6 @@ export interface TopSellingProduct {
   productName: string;
   quantitySold: number;
   revenue: Money;
-}
-
-export interface DailyRevenue {
-  date: Date;
-  revenue: Money;
-  orders: number;
 }
 
 export class MerchantSalesStatsEntity implements MerchantSalesStats {
@@ -116,7 +111,7 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
     if (this.topSellingProducts.length === 0) {
       return null;
     }
-    return this.topSellingProducts[0];
+    return this.topSellingProducts[0] ?? null;
   }
 
   /**
@@ -134,7 +129,7 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
   get estimatedCustomerSavings(): Money {
     const estimatedOriginalValue = this.totalRevenue.amountMinor / 0.4; // Si 40% du prix, alors 100% = x / 0.4
     const savings = estimatedOriginalValue - this.totalRevenue.amountMinor;
-    return new Money(Math.round(savings), this.totalRevenue.currencyCode);
+    return Money.fromMinor(Math.round(savings), this.totalRevenue.currencyCode);
   }
 
   /**
@@ -144,9 +139,9 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
     return new MerchantSalesStatsEntity(
       json.merchantId || json.merchant_id,
       json.period,
-      Money.fromJson(json.totalRevenue || json.total_revenue),
+      Money.from(json.totalRevenue || json.total_revenue),
       json.totalOrders || json.total_orders,
-      Money.fromJson(json.averageOrderValue || json.average_order_value),
+      Money.from(json.averageOrderValue || json.average_order_value),
       json.totalItemsSold || json.total_items_sold,
       json.totalItemsSaved || json.total_items_saved,
       json.conversionRate || json.conversion_rate,
@@ -156,14 +151,14 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
         productId: p.productId || p.product_id,
         productName: p.productName || p.product_name,
         quantitySold: p.quantitySold || p.quantity_sold,
-        revenue: Money.fromJson(p.revenue),
+        revenue: Money.from(p.revenue),
       })),
       new Date(json.startDate || json.start_date),
       new Date(json.endDate || json.end_date),
       new Date(json.generatedAt || json.generated_at),
       json.revenueByDay ? json.revenueByDay.map((d: any) => ({
         date: new Date(d.date),
-        revenue: Money.fromJson(d.revenue),
+        revenue: Money.from(d.revenue),
         orders: d.orders,
       })) : undefined
     );
@@ -176,9 +171,9 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
     return {
       merchant_id: this.merchantId,
       period: this.period,
-      total_revenue: this.totalRevenue.toJson(),
+      total_revenue: this.totalRevenue.toJSON(),
       total_orders: this.totalOrders,
-      average_order_value: this.averageOrderValue.toJson(),
+      average_order_value: this.averageOrderValue.toJSON(),
       total_items_sold: this.totalItemsSold,
       total_items_saved: this.totalItemsSaved,
       conversion_rate: this.conversionRate,
@@ -188,14 +183,14 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
         product_id: p.productId,
         product_name: p.productName,
         quantity_sold: p.quantitySold,
-        revenue: p.revenue.toJson(),
+        revenue: p.revenue.toJSON(),
       })),
       start_date: this.startDate.toISOString(),
       end_date: this.endDate.toISOString(),
       generated_at: this.generatedAt.toISOString(),
       revenue_by_day: this.revenueByDay?.map(d => ({
         date: d.date.toISOString(),
-        revenue: d.revenue.toJson(),
+        revenue: d.revenue.toJSON(),
         orders: d.orders,
       })),
     };
