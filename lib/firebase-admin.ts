@@ -46,29 +46,56 @@ if (getApps().length === 0) {
         // Nettoyer la clé privée de manière robuste
         let cleanedPrivateKey = privateKey.trim();
         
-        // Enlever les guillemets au début/fin si présents
-        if ((cleanedPrivateKey.startsWith('"') && cleanedPrivateKey.endsWith('"')) ||
-            (cleanedPrivateKey.startsWith("'") && cleanedPrivateKey.endsWith("'"))) {
-          cleanedPrivateKey = cleanedPrivateKey.slice(1, -1);
-        }
+        // Enlever les guillemets au début/fin si présents (simple et double)
+        cleanedPrivateKey = cleanedPrivateKey.replace(/^["']|["']$/g, '');
         
-        // Remplacer les séquences d'échappement \n par de vrais retours à la ligne
+        // Remplacer les différentes variantes de retours à la ligne
+        // 1. Séquence littérale \n (échappée)
         cleanedPrivateKey = cleanedPrivateKey.replace(/\\n/g, '\n');
+        // 2. Séquence double échappée \\n
+        cleanedPrivateKey = cleanedPrivateKey.replace(/\\\\n/g, '\n');
+        // 3. Retours à la ligne réels (si présents)
+        cleanedPrivateKey = cleanedPrivateKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         
-        // Si la clé ne contient pas de retours à la ligne mais contient des espaces,
+        // Si la clé ne contient toujours pas de retours à la ligne mais contient BEGIN/END,
         // essayer de la reformater (cas où la clé est sur une seule ligne)
         if (!cleanedPrivateKey.includes('\n') && cleanedPrivateKey.includes('BEGIN PRIVATE KEY')) {
           // La clé est probablement sur une seule ligne, essayer de la reformater
           // Format attendu: -----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
           cleanedPrivateKey = cleanedPrivateKey
             .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
-            .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----')
-            .replace(/\s+/g, '\n'); // Remplacer les espaces multiples par des retours à la ligne
+            .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+          
+          // Remplacer les espaces multiples par des retours à la ligne uniquement dans le corps de la clé
+          const beginMatch = cleanedPrivateKey.match(/-----BEGIN PRIVATE KEY-----\n(.+)\n-----END PRIVATE KEY-----/);
+          if (beginMatch && beginMatch[1]) {
+            const keyBody = beginMatch[1].replace(/\s+/g, '\n');
+            cleanedPrivateKey = cleanedPrivateKey.replace(
+              /-----BEGIN PRIVATE KEY-----\n.+\n-----END PRIVATE KEY-----/,
+              `-----BEGIN PRIVATE KEY-----\n${keyBody}\n-----END PRIVATE KEY-----`
+            );
+          }
         }
         
+        // Nettoyer les retours à la ligne multiples et les espaces en début/fin de ligne
+        cleanedPrivateKey = cleanedPrivateKey
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .join('\n');
+        
         // Vérifier que la clé est valide avant d'essayer de l'utiliser
-        if (!cleanedPrivateKey.includes('BEGIN PRIVATE KEY') || !cleanedPrivateKey.includes('END PRIVATE KEY')) {
+        if (!cleanedPrivateKey.includes('-----BEGIN PRIVATE KEY-----') || 
+            !cleanedPrivateKey.includes('-----END PRIVATE KEY-----')) {
           throw new Error('FIREBASE_PRIVATE_KEY format invalide: doit contenir -----BEGIN PRIVATE KEY----- et -----END PRIVATE KEY-----');
+        }
+        
+        // Vérifier que la clé commence et se termine correctement
+        if (!cleanedPrivateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
+          throw new Error('FIREBASE_PRIVATE_KEY doit commencer par -----BEGIN PRIVATE KEY-----');
+        }
+        if (!cleanedPrivateKey.endsWith('-----END PRIVATE KEY-----')) {
+          throw new Error('FIREBASE_PRIVATE_KEY doit se terminer par -----END PRIVATE KEY-----');
         }
         
         // Utiliser les credentials explicites
