@@ -73,7 +73,54 @@ export async function getIpLocation(ip: string): Promise<IpLocation | null> {
   try {
     // 🟢 EDGE → API externe uniquement
     if (isEdgeRuntime) {
-      const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,timezone`);
+      try {
+        const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,timezone`, {
+          signal: AbortSignal.timeout(5000) // Timeout de 5s
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'success') {
+            return {
+              country: data.country,
+              region: data.regionName,
+              city: data.city,
+              latitude: data.lat,
+              longitude: data.lon,
+              timezone: data.timezone,
+            };
+          }
+        }
+      } catch (apiError) {
+        console.warn('[IpIntelligence][Edge] API externe échouée, mode dégradé:', apiError);
+      }
+      return null;
+    }
+
+    // 🟢 NODE.JS → geoip-lite rapide avec gestion d'erreur robuste
+    try {
+      const geoip = await import('geoip-lite');
+      const geo = geoip.lookup(ip);
+
+      if (geo) {
+        return {
+          country: geo.country,
+          region: geo.region,
+          city: geo.city || 'Unknown',
+          latitude: geo.ll[0],
+          longitude: geo.ll[1],
+          timezone: geo.timezone,
+        };
+      }
+    } catch (geoipError: any) {
+      // Si geoip-lite échoue (données manquantes, etc.), utiliser l'API externe
+      console.warn('[IpIntelligence] geoip-lite non disponible, utilisation API externe:', geoipError.message);
+    }
+
+    // Fallback API externe
+    try {
+      const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,timezone`, {
+        signal: AbortSignal.timeout(5000) // Timeout de 5s
+      });
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
@@ -87,43 +134,13 @@ export async function getIpLocation(ip: string): Promise<IpLocation | null> {
           };
         }
       }
-      return null;
-    }
-
-    // 🟢 NODE.JS → geoip-lite rapide
-    const geoip = await import('geoip-lite');
-    const geo = geoip.lookup(ip);
-
-    if (geo) {
-      return {
-        country: geo.country,
-        region: geo.region,
-        city: geo.city || 'Unknown',
-        latitude: geo.ll[0],
-        longitude: geo.ll[1],
-        timezone: geo.timezone,
-      };
-    }
-
-    // Fallback API externe
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,timezone`);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === 'success') {
-        return {
-          country: data.country,
-          region: data.regionName,
-          city: data.city,
-          latitude: data.lat,
-          longitude: data.lon,
-          timezone: data.timezone,
-        };
-      }
+    } catch (apiError) {
+      console.warn('[IpIntelligence] API externe échouée:', apiError);
     }
 
     return null;
   } catch (error) {
-    console.error('[IpIntelligence] Failed to get location:', error);
+    console.error('[IpIntelligence] Erreur critique de géolocalisation:', error);
     return null;
   }
 }
