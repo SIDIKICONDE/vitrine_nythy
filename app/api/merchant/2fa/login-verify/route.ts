@@ -73,6 +73,13 @@ export async function POST(request: NextRequest) {
     }
 
     const userDoc = usersSnapshot.docs[0];
+    if (!userDoc) {
+      return NextResponse.json(
+        { success: false, message: 'Utilisateur non trouvé' },
+        { status: 404 }
+      );
+    }
+    
     const userData = userDoc.data();
     const secret = userData?.['2fa_secret'];
     const enabled = userData?.['2fa_enabled'];
