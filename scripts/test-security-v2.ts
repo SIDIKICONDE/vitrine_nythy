@@ -10,6 +10,9 @@
  * - Monitoring
  */
 
+// Make this file a module to avoid global scope conflicts
+export {};
+
 const API_BASE_URL = process.env['API_BASE_URL'] || 'http://localhost:3000';
 
 const colors = {
@@ -477,12 +480,13 @@ async function runAllTests() {
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => !r.passed).length;
   const total = results.length;
-  const successRate = ((passed / total) * 100).toFixed(1);
+  const successRate = (passed / total) * 100;
+  const successRateFormatted = successRate.toFixed(1);
 
   log(`Total: ${total} tests`, 'cyan');
   log(`✅ Réussis: ${passed}`, 'green');
   log(`❌ Échoués: ${failed}`, 'red');
-  log(`📈 Taux de réussite: ${successRate}%\n`, 'cyan');
+  log(`📈 Taux de réussite: ${successRateFormatted}%\n`, 'cyan');
 
   // Détails des tests échoués
   if (failed > 0) {

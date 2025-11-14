@@ -21,7 +21,10 @@ export class GetMerchantRatingsUseCase {
       throw new Error('Merchant ID is required');
     }
 
-    return await this.merchantRepository.getMerchantRatings(merchantId, limit, offset);
+    const ratings = await this.merchantRepository.getMerchantRatings(merchantId);
+    
+    // Appliquer pagination et limite
+    return ratings.slice(offset, offset + limit);
   }
 }
 

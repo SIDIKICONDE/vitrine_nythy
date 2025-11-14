@@ -13,7 +13,14 @@ export class GetMerchantProductsUseCase {
       throw new Error('Merchant ID is required');
     }
 
-    return await this.merchantRepository.getMerchantProducts(merchantId, onlyAvailable);
+    const products = await this.merchantRepository.getMerchantProducts(merchantId);
+    
+    // Filtrer les produits disponibles si nécessaire
+    if (onlyAvailable) {
+      return products.filter((p: any) => p.isAvailable);
+    }
+    
+    return products;
   }
 }
 

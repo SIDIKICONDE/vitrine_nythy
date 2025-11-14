@@ -94,7 +94,7 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
     const firstDay = this.revenueByDay[0];
     const lastDay = this.revenueByDay[this.revenueByDay.length - 1];
 
-    if (firstDay.revenue.amountMinor === 0) {
+    if (!firstDay || !lastDay || firstDay.revenue.amountMinor === 0) {
       return 0;
     }
 
@@ -190,7 +190,7 @@ export class MerchantSalesStatsEntity implements MerchantSalesStats {
       generated_at: this.generatedAt.toISOString(),
       revenue_by_day: this.revenueByDay?.map(d => ({
         date: d.date.toISOString(),
-        revenue: d.revenue.toJSON(),
+        revenue: d.revenue,
         orders: d.orders,
       })),
     };

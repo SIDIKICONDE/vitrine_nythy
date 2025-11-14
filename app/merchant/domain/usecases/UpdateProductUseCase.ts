@@ -29,11 +29,12 @@ export class UpdateProductUseCase {
     }
 
     // Créer le produit mis à jour
-    const updatedProduct: Product = {
-      ...existingProduct,
+    const productData = {
+      ...existingProduct.toJSON(),
       ...updates,
       updatedAt: new Date(),
     };
+    const updatedProduct = Product.from(productData);
 
     await this.productRepository.updateProduct(updatedProduct);
   }

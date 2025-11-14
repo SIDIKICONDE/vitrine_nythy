@@ -216,7 +216,11 @@ describe('Rate Limiter Distributed Module', () => {
     it('should have increasing limits from strict to permissive', () => {
       const tiers = Object.values(RATE_LIMIT_TIERS);
       for (let i = 1; i < tiers.length; i++) {
-        expect(tiers[i].maxRequests).toBeGreaterThan(tiers[i - 1].maxRequests);
+        const currentTier = tiers[i];
+        const previousTier = tiers[i - 1];
+        if (currentTier && previousTier) {
+          expect(currentTier.maxRequests).toBeGreaterThan(previousTier.maxRequests);
+        }
       }
     });
   });

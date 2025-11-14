@@ -13,7 +13,8 @@ import { MerchantRepository } from '../app/merchant/domain/repositories/Merchant
 import { StorageService } from '../app/merchant/domain/services/StorageService';
 import { UpdateMerchantUseCase } from '../app/merchant/domain/usecases/UpdateMerchantUseCase';
 import { UploadImageUseCase } from '../app/merchant/domain/usecases/UploadImageUseCase';
-import { Merchant, MerchantUpdateData } from '../types/merchant';
+import { Merchant } from '../app/merchant/domain/entities/Merchant';
+import { MerchantUpdateData } from '../types/merchant';
 
 // ========================================
 // TYPES
@@ -272,51 +273,65 @@ export function useMerchantSettings(
  * Transforme l'agrégat Merchant (domaine) en FormData (présentation)
  */
 function mapMerchantToFormData(merchant: Merchant): MerchantSettingsFormData {
+  const merchantData = merchant.toJSON();
+  
   return {
     // Informations commerciales
-    businessName: merchant.businessName,
-    legalName: merchant.legalName,
-    siret: merchant.siret,
-    merchantType: merchant.merchantType,
-    description: merchant.description || '',
+    businessName: merchantData.name,
+    legalName: merchantData.name,
+    siret: merchantData.siret || '',
+    merchantType: merchantData.type,
+    description: merchantData.description || '',
 
     // Contact
-    email: merchant.contactInfo.email,
-    phone: merchant.contactInfo.phone,
-    websiteUrl: merchant.contactInfo.website || '',
+    email: merchantData.email || '',
+    phone: merchantData.phone || '',
+    websiteUrl: merchantData.websiteUrl || '',
 
     // Adresse
-    address: merchant.address.street,
-    city: merchant.address.city,
-    postalCode: merchant.address.postalCode,
+    address: merchantData.addressLine1 || '',
+    city: merchantData.city || '',
+    postalCode: '',
 
     // Images
-    logoUrl: merchant.logoUrl || '',
-    bannerUrl: merchant.bannerUrl || '',
+    logoUrl: merchantData.imageUrls?.[0] || '',
+    bannerUrl: merchantData.bannerUrl || '',
 
-    // Paiement (extensions - TODO: ajouter au type Merchant)
-    iban: (merchant as any).iban || '',
-    bic: (merchant as any).bic || '',
-    paymentPreference: (merchant as any).paymentPreference || 'weekly',
+    // Paiement
+    iban: merchantData.iban || '',
+    bic: merchantData.bic || '',
+    paymentPreference: (merchantData.paymentPreference as 'weekly' | 'biweekly' | 'manual') || 'weekly',
 
-    // Settings
-    notifications: merchant.settings.notifications,
-    privacy: merchant.settings.privacy,
-    preferences: merchant.settings.preferences,
+    // Settings (valeurs par défaut)
+    notifications: {
+      email: true,
+      sms: false,
+      push: true,
+    },
+    privacy: {
+      showPhone: true,
+      showEmail: true,
+      showAddress: true,
+    },
+    preferences: {
+      language: 'fr',
+      currency: 'EUR',
+      timezone: 'Europe/Paris',
+    },
 
     // UI uniquement
-    messageEnabled: true, // TODO: récupérer depuis les settings UI
-    twoFactorEnabled: false, // TODO: récupérer depuis auth
-    sessionTimeout: 30, // TODO: récupérer depuis auth
-    isActive: merchant.status === 'active',
+    messageEnabled: merchantData.messageEnabled !== false,
+    twoFactorEnabled: false,
+    sessionTimeout: 30,
+    isActive: merchantData.isActive,
 
     // Statistiques (read-only)
-    followersCount: merchant.stats.followersCount,
-    averageRating: merchant.stats.averageRating,
-    totalReviews: merchant.stats.totalReviews,
-    savedItemsCount: merchant.stats.savedItemsCount,
-    co2Saved: merchant.stats.co2Saved,
-    totalOrders: merchant.stats.totalOrders,
+    followersCount: merchantData.stats?.followersCount || 0,
+    averageRating: merchantData.stats?.averageRating || 0,
+    totalReviews: merchantData.stats?.totalReviews || 0,
+    savedItemsCount: merchantData.stats?.savedItemsCount || 0,
+    co2Saved: merchantData.stats?.co2Saved || 0,
+    totalOrders: merchantData.stats?.totalOrders || 0,
   };
 }
 

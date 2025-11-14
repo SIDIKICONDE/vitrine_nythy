@@ -132,13 +132,21 @@ export const trackLeagueEngagement = onSchedule(
           engagementByTier[data.tier] = 0;
           countByTier[data.tier] = 0;
         }
-        engagementByTier[data.tier] += data.engagement;
-        countByTier[data.tier]++;
+        const tierEngagement = engagementByTier[data.tier];
+        const tierCount = countByTier[data.tier];
+        if (tierEngagement !== undefined && tierCount !== undefined) {
+          engagementByTier[data.tier] = tierEngagement + data.engagement;
+          countByTier[data.tier] = tierCount + 1;
+        }
       }
 
       const avgEngagementByTier: Record<string, number> = {};
       for (const tier in engagementByTier) {
-        avgEngagementByTier[tier] = engagementByTier[tier] / countByTier[tier];
+        const engagement = engagementByTier[tier];
+        const count = countByTier[tier];
+        if (engagement !== undefined && count !== undefined && count > 0) {
+          avgEngagementByTier[tier] = engagement / count;
+        }
       }
 
       batch.set(

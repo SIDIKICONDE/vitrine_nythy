@@ -164,13 +164,15 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     if (!ordersSnapshot.empty) {
       const orderDoc = ordersSnapshot.docs[0];
 
-      await orderDoc.ref.update({
-        status: 'refunded',
-        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
-        refundAmount: charge.amount_refunded,
-      });
+      if (orderDoc) {
+        await orderDoc.ref.update({
+          status: 'refunded',
+          refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+          refundAmount: charge.amount_refunded,
+        });
 
-      console.log('Order refunded:', orderDoc.id);
+        console.log('Order refunded:', orderDoc.id);
+      }
     }
   }
 

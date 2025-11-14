@@ -27,7 +27,7 @@ export class CompleteMerchantOnboardingUseCase {
       throw new Error(`Merchant with ID ${data.merchantId} not found`);
     }
 
-    await this.merchantRepository.completeOnboarding(data);
+    await this.merchantRepository.completeOnboarding(data.merchantId);
   }
 }
 

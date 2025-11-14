@@ -41,7 +41,9 @@ describe('CSRF Edge V2 Module', () => {
     it('should have valid timestamp', () => {
       const token = generateCsrfToken();
       const parts = token.split('.');
-      const timestamp = parseInt(parts[1], 10);
+      const timestampPart = parts[1];
+      expect(timestampPart).toBeTruthy();
+      const timestamp = parseInt(timestampPart || '0', 10);
       expect(timestamp).toBeGreaterThan(0);
       expect(timestamp).toBeLessThanOrEqual(Date.now());
     });

@@ -107,6 +107,10 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
     }
     
     const doc = snapshot.docs[0];
+    if (!doc) {
+      return null;
+    }
+    
     return {
       id: doc.id,
       ...convertTimestamps(doc.data()),

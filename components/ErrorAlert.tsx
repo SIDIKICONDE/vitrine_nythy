@@ -30,6 +30,8 @@ export function ErrorAlert() {
 
       return () => clearTimeout(timer);
     }
+    
+    return undefined;
   }, [searchParams]);
 
   if (!visible || !error) {

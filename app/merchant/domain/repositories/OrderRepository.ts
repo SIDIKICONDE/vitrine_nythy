@@ -13,7 +13,7 @@ export interface OrderRepository {
   updateOrder(order: Order): Promise<void>;
 
   // Recherche
-  getOrdersByStore(merchantId: string): Promise<Order[]>;
+  getOrdersByStore(merchantId: string, status?: OrderStatus, limit?: number, offset?: number): Promise<Order[]>;
   getOrdersByUser(userId: string): Promise<Order[]>;
 
   // Gestion

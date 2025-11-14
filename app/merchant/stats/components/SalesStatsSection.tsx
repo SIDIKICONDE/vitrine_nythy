@@ -76,8 +76,8 @@ export default function SalesStatsSection({ stats }: SalesStatsSectionProps) {
           <h3 className="text-lg font-bold text-foreground mb-4">Évolution des revenus</h3>
           <div className="space-y-2">
             {stats.revenueByDay.slice(-14).map((day, index) => {
-              const maxRevenue = Math.max(...stats.revenueByDay!.map(d => d.revenue.amountDecimal));
-              const percentage = (day.revenue.amountDecimal / maxRevenue) * 100;
+              const maxRevenue = Math.max(...stats.revenueByDay!.map(d => d.revenue.amountDecimal ?? 0));
+              const percentage = maxRevenue > 0 ? ((day.revenue.amountDecimal ?? 0) / maxRevenue) * 100 : 0;
 
               return (
                 <div key={index} className="flex items-center gap-4">

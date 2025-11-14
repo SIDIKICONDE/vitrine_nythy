@@ -94,13 +94,21 @@ describe('CSP Nonce Module', () => {
 
     it('should include upgrade-insecure-requests in production', () => {
       const originalEnv = process.env['NODE_ENV'];
-      process.env['NODE_ENV'] = 'production';
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: 'production',
+        writable: true,
+        configurable: true
+      });
       
       const nonce = 'test-nonce-123';
       const csp = buildCspHeader({ nonce });
       expect(csp).toContain('upgrade-insecure-requests');
       
-      process.env['NODE_ENV'] = originalEnv;
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: originalEnv,
+        writable: true,
+        configurable: true
+      });
     });
   });
 

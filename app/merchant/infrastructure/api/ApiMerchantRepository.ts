@@ -4,16 +4,63 @@
  */
 
 import { MerchantSalesStats } from '@/app/merchant/domain/entities/MerchantSalesStats';
-import { MerchantRepository } from '@/app/merchant/domain/repositories/MerchantRepository';
+import { Merchant } from '@/app/merchant/domain/entities/Merchant';
+import { MerchantRepository, MerchantUpdateData } from '@/app/merchant/domain/repositories/MerchantRepository';
 import { MerchantStatistics } from '@/app/merchant/domain/usecases/GetMerchantStatisticsUseCase';
 import { createAuthHeaders } from '@/lib/csrf-client';
-import { Merchant, MerchantUpdateData } from '@/types/merchant';
+import { Merchant as ApiMerchant } from '@/types/merchant';
+import { MerchantType } from '@/app/merchant/domain/enums/MerchantType';
 
 export class ApiMerchantRepository implements MerchantRepository {
   private baseUrl: string;
 
   constructor(baseUrl = '/api') {
     this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Convertit les données API vers l'entité domaine Merchant
+   */
+  private apiMerchantToDomain(apiMerchant: any): Merchant {
+    return Merchant.from({
+      id: apiMerchant.id,
+      name: apiMerchant.business_name || apiMerchant.name || '',
+      type: (apiMerchant.merchantType || apiMerchant.merchant_type || apiMerchant.type || apiMerchant.category || 'autre') as MerchantType,
+      description: apiMerchant.description || '',
+      imageUrls: apiMerchant.gallery || [],
+      bannerUrl: apiMerchant.banner || apiMerchant.banner_url || '',
+      location: (apiMerchant.latitude && apiMerchant.longitude) ? {
+        latitude: apiMerchant.latitude,
+        longitude: apiMerchant.longitude,
+      } : undefined,
+      addressLine1: apiMerchant.address || '',
+      city: apiMerchant.city || '',
+      countryCode: apiMerchant.country || 'FR',
+      tags: apiMerchant.tags || [],
+      phone: apiMerchant.phone || apiMerchant.contact_phone || '',
+      websiteUrl: apiMerchant.website || '',
+      createdAt: apiMerchant.created_at ? new Date(apiMerchant.created_at) : new Date(),
+      updatedAt: apiMerchant.updated_at ? new Date(apiMerchant.updated_at) : new Date(),
+      isVerified: apiMerchant.verification_status === 'verified',
+      isActive: apiMerchant.status === 'active',
+      stats: {
+        followersCount: apiMerchant.stats?.followersCount || apiMerchant.followers_count || 0,
+        averageRating: apiMerchant.stats?.averageRating || apiMerchant.average_rating || 0,
+        totalReviews: apiMerchant.stats?.totalReviews || apiMerchant.total_reviews || 0,
+        savedItemsCount: apiMerchant.stats?.savedItemsCount || apiMerchant.saved_items_count || 0,
+        co2Saved: apiMerchant.stats?.co2Saved || apiMerchant.co2_saved || 0,
+        totalOrders: apiMerchant.stats?.totalOrders || apiMerchant.total_orders || 0,
+        totalRevenue: apiMerchant.stats?.totalRevenue || apiMerchant.total_revenue || 0,
+        productsCount: apiMerchant.stats?.productsCount || apiMerchant.total_products || 0,
+      },
+      email: apiMerchant.email || apiMerchant.contact_email || '',
+      siret: apiMerchant.siret || '',
+      messageEnabled: apiMerchant.message_enabled !== false,
+      ownerUserId: apiMerchant.owner_user_id || apiMerchant.ownerUserId || '',
+      iban: apiMerchant.iban || '',
+      bic: apiMerchant.bic || '',
+      paymentPreference: apiMerchant.payment_preference || '',
+    });
   }
 
   /**
@@ -40,93 +87,7 @@ export class ApiMerchantRepository implements MerchantRepository {
         throw new Error(data.message || 'Erreur lors de la récupération du marchand');
       }
 
-      const merchant = data.merchant;
-
-      // Normaliser les données en format pour le domaine Merchant
-      return {
-        id: merchant.id,
-        ownerUserId: merchant.owner_user_id || merchant.ownerUserId || '',
-        businessName: merchant.business_name || merchant.name || '',
-        legalName: merchant.legal_name || merchant.business_name || '',
-        siret: merchant.siret || '',
-        merchantType: merchant.merchantType || merchant.merchant_type || merchant.type || merchant.category || 'autre',
-        description: merchant.description || '',
-        status: merchant.status || 'active',
-        verificationStatus: merchant.verification_status || 'pending',
-
-        // Contact et localisation
-        address: {
-          street: merchant.address || '',
-          postalCode: merchant.postal_code || merchant.postalCode || '',
-          city: merchant.city || '',
-          countryCode: merchant.country || 'FR',
-          location: {
-            latitude: merchant.latitude || 0,
-            longitude: merchant.longitude || 0,
-          }
-        },
-        contactInfo: {
-          email: merchant.email || merchant.contact_email || '',
-          phone: merchant.phone || merchant.contact_phone || '',
-          website: merchant.website || '',
-        },
-        socials: {
-          instagram: merchant.instagram || '',
-          facebook: merchant.facebook || '',
-        },
-
-        // Images
-        logoUrl: merchant.logo || merchant.logo_url || '',
-        bannerUrl: merchant.banner || merchant.banner_url || '',
-        gallery: merchant.gallery || [],
-
-        // Horaires et livraison
-        operatingHours: merchant.opening_hours || merchant.operatingHours || {},
-        deliveryOptions: merchant.delivery_options || merchant.deliveryOptions || {
-          inStorePickup: true,
-          localDelivery: false,
-        },
-        averagePrepTimeMinutes: merchant.average_prep_time_minutes || 15,
-
-        // Pricing et langues
-        languages: merchant.languages || ['fr'],
-        acceptsSurpriseBox: merchant.accepts_surprise_box !== false,
-
-        // Statistiques
-        stats: {
-          followersCount: merchant.stats?.followersCount || merchant.followers_count || 0,
-          averageRating: merchant.stats?.averageRating || merchant.average_rating || 0,
-          totalReviews: merchant.stats?.totalReviews || merchant.total_reviews || 0,
-          savedItemsCount: merchant.stats?.savedItemsCount || merchant.saved_items_count || 0,
-          co2Saved: merchant.stats?.co2Saved || merchant.co2_saved || 0,
-          totalOrders: merchant.stats?.totalOrders || merchant.total_orders || 0,
-          totalRevenue: merchant.stats?.totalRevenue || merchant.total_revenue || 0,
-          productsCount: merchant.stats?.productsCount || merchant.total_products || 0,
-        },
-
-        // Configuration
-        settings: {
-          notifications: merchant.notifications || merchant.settings?.notifications || {
-            email: true,
-            sms: false,
-            push: true,
-          },
-          privacy: merchant.privacy || merchant.settings?.privacy || {
-            showPhone: true,
-            showEmail: true,
-            showAddress: true,
-          },
-          preferences: merchant.preferences || merchant.settings?.preferences || {
-            language: 'fr',
-            currency: 'EUR',
-            timezone: 'Europe/Paris',
-          },
-        },
-
-        // Métadonnées
-        createdAt: merchant.created_at ? new Date(merchant.created_at) : new Date(),
-        updatedAt: merchant.updated_at ? new Date(merchant.updated_at) : new Date(),
-      } as Merchant;
+      return this.apiMerchantToDomain(data.merchant);
     } catch (error) {
       console.error('Erreur getMerchantById:', error);
       throw error;
@@ -175,23 +136,90 @@ export class ApiMerchantRepository implements MerchantRepository {
   }
 
   /**
-   * Récupère tous les marchands (non implémenté pour l'instant)
+   * Enregistre un nouveau commerçant
    */
-  async getAllMerchants(): Promise<Merchant[]> {
+  async registerMerchant(_merchantData: any): Promise<Merchant> {
     throw new Error('Méthode non implémentée');
   }
 
   /**
-   * Crée un nouveau marchand (non implémenté pour l'instant)
+   * Complète l'onboarding d'un commerçant
    */
-  async createMerchant(_data: any): Promise<string> {
-    throw new Error('Méthode non implémentée');
+  async completeOnboarding(merchantId: string): Promise<Merchant> {
+    const merchant = await this.getMerchantById(merchantId);
+    if (!merchant) {
+      throw new Error('Merchant not found');
+    }
+    return merchant;
   }
 
   /**
-   * Supprime un marchand (non implémenté pour l'instant)
+   * Supprime un marchand
    */
   async deleteMerchant(_merchantId: string): Promise<void> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Fait suivre un commerçant par un utilisateur
+   */
+  async followMerchant(_userId: string, _merchantId: string): Promise<void> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Récupère les commerçants suivis par un utilisateur
+   */
+  async getFollowedMerchants(_userId: string): Promise<Merchant[]> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Récupère les produits d'un commerçant
+   */
+  async getMerchantProducts(_merchantId: string): Promise<any[]> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Récupère les évaluations d'un commerçant
+   */
+  async getMerchantRatings(_merchantId: string): Promise<any> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Note un commerçant
+   */
+  async rateMerchant(_userId: string, _merchantId: string, _rating: number, _comment?: string): Promise<void> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Récupère les commerçants par catégorie
+   */
+  async getMerchantsByCategory(_category: string): Promise<Merchant[]> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Recherche des commerçants à proximité
+   */
+  async searchNearby(_latitude: number, _longitude: number, _radiusKm: number): Promise<Merchant[]> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Suspend un commerçant
+   */
+  async suspendMerchant(_merchantId: string, _reason: string): Promise<void> {
+    throw new Error('Méthode non implémentée');
+  }
+
+  /**
+   * Vérifie un commerçant
+   */
+  async verifyMerchant(_merchantId: string): Promise<void> {
     throw new Error('Méthode non implémentée');
   }
 
@@ -200,7 +228,13 @@ export class ApiMerchantRepository implements MerchantRepository {
    */
   async getMerchantSettings(merchantId: string): Promise<any> {
     const merchant = await this.getMerchantById(merchantId);
-    return merchant?.settings || null;
+    // Les settings ne sont pas directement disponibles dans l'entité domaine Merchant
+    // Retourner un objet par défaut pour la compatibilité
+    return {
+      notifications: { email: true, sms: false, push: true },
+      privacy: { showPhone: true, showEmail: true, showAddress: true },
+      preferences: { language: 'fr', currency: 'EUR', timezone: 'Europe/Paris' },
+    };
   }
 
   /**

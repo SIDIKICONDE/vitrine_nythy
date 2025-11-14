@@ -103,12 +103,15 @@ export const trackTournamentPopularity = onSchedule(
       popularityScores.sort((a, b) => b.score - a.score);
 
       for (let i = 0; i < popularityScores.length; i++) {
-        const tournamentRef = db
-          .collection("tournaments")
-          .doc(popularityScores[i].tournamentId);
-        batch.update(tournamentRef, {
-          popularityRank: i + 1,
-        });
+        const scoreData = popularityScores[i];
+        if (scoreData) {
+          const tournamentRef = db
+            .collection("tournaments")
+            .doc(scoreData.tournamentId);
+          batch.update(tournamentRef, {
+            popularityRank: i + 1,
+          });
+        }
       }
 
       // 5. Sauvegarder le top 10 dans analytics

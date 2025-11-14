@@ -6,6 +6,9 @@
 export interface MoneyData {
   readonly amountMinor: number; // Centimes
   readonly currencyCode: string; // 'EUR', 'USD', etc.
+  readonly amountDecimal?: number; // Amount in decimal format
+  readonly formatted?: string; // Formatted string
+  toJSON?: () => MoneyData; // Optional serialization method
 }
 
 export class Money {

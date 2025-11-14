@@ -178,6 +178,13 @@ export async function authenticateUser(
 
     const token = authHeader.split('Bearer ')[1];
 
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token format',
+      });
+    }
+
     // Vérifier d'abord dans le cache
     let decodedToken = tokenCache.get(token);
 

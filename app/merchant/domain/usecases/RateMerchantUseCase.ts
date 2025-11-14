@@ -32,7 +32,12 @@ export class RateMerchantUseCase {
       throw new Error(`Merchant with ID ${ratingData.merchantId} not found`);
     }
 
-    await this.merchantRepository.rateMerchant(ratingData);
+    await this.merchantRepository.rateMerchant(
+      ratingData.userId,
+      ratingData.merchantId,
+      ratingData.rating,
+      ratingData.comment
+    );
   }
 }
 

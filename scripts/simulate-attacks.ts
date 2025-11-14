@@ -5,6 +5,9 @@
  * et vérifier que le monitoring Flutter fonctionne correctement
  */
 
+// Make this file a module to avoid global scope conflicts
+export {};
+
 const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3000';
 
 const colors = {

@@ -215,6 +215,10 @@ export async function confirmPaymentAndCreateOrder(
 
     const { reservationId, userId, offerId, merchantId } = paymentIntent.metadata;
 
+    if (!reservationId || !userId) {
+      throw new Error('Invalid payment intent metadata');
+    }
+
     // Récupérer la réservation
     const reservationDoc = await db.collection('reservations').doc(reservationId).get();
 

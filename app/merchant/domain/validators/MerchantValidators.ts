@@ -23,7 +23,10 @@ export function validateSiret(siret: string): boolean {
   // Algorithme de Luhn pour validation du SIRET
   let sum = 0;
   for (let i = 0; i < 14; i++) {
-    let digit = parseInt(cleaned[i], 10);
+    const char = cleaned[i];
+    if (!char) return false;
+    
+    let digit = parseInt(char, 10);
 
     if (i % 2 === 0) {
       digit *= 2;

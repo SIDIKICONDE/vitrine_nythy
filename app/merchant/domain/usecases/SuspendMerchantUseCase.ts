@@ -37,7 +37,8 @@ export class SuspendMerchantUseCase {
       throw new Error('Expiration date is required for temporary suspension');
     }
 
-    await this.merchantRepository.suspendMerchant(data);
+    const reason = `${data.reason}${data.notes ? ` - ${data.notes}` : ''}`;
+    await this.merchantRepository.suspendMerchant(data.merchantId, reason);
   }
 }
 

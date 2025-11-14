@@ -30,7 +30,7 @@ export class VerifyMerchantUseCase {
       throw new Error(`Merchant with ID ${data.merchantId} not found`);
     }
 
-    await this.merchantRepository.verifyMerchant(data);
+    await this.merchantRepository.verifyMerchant(data.merchantId);
   }
 }
 

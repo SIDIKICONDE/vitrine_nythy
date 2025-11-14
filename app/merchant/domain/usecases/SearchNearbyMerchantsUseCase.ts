@@ -11,7 +11,11 @@ export class SearchNearbyMerchantsUseCase {
   constructor(private readonly merchantRepository: MerchantRepository) {}
 
   async execute(query: ProximitySearchQuery): Promise<Merchant[]> {
-    return this.merchantRepository.searchNearby(query);
+    return this.merchantRepository.searchNearby(
+      query.center.latitude,
+      query.center.longitude,
+      query.radiusKm
+    );
   }
 }
 

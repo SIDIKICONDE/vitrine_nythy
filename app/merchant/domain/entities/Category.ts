@@ -3,12 +3,7 @@
  * Catégorie
  */
 
-export enum CategoryType {
-  PRODUCT = 'product',
-  MERCHANT = 'merchant',
-  SERVICE = 'service',
-  EVENT = 'event',
-}
+import { CategoryType } from '../enums/CategoryType';
 
 export interface CategoryData {
   id: string;

@@ -33,7 +33,7 @@ export class GetMerchantOwnerUseCase {
     }
 
     const merchant = await this.merchantRepository.getMerchantById(merchantId);
-    return merchant?.ownerId || null;
+    return merchant?.ownerUserId || null;
   }
 }
 

@@ -25,11 +25,11 @@ if (typeof window !== 'undefined') {
  * Options de sanitization par défaut
  */
 const DEFAULT_SANITIZE_OPTIONS = {
-  ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'],
+  ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'] as string[],
   ALLOWED_ATTR: [] as string[],
   ALLOW_DATA_ATTR: false,
   KEEP_CONTENT: true,
-} as const;
+};
 
 /**
  * Sanitize une chaîne HTML

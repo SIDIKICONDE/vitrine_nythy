@@ -3,7 +3,8 @@
  * Service de gestion des catégories
  */
 
-import { Category, CategoryType } from '../entities/Category';
+import { Category } from '../entities/Category';
+import { CategoryType } from '../enums/CategoryType';
 import { CategoryRepository } from '../repositories/CategoryRepository';
 
 export class CategoryService {

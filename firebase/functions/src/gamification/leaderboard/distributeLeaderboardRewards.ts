@@ -133,11 +133,11 @@ async function distributeRewards(
       let reward: typeof RANK_REWARDS[1] | typeof TOP_10_REWARD | typeof TOP_100_REWARD | typeof TOP_500_REWARD | null = null;
 
       if (rank === 1) {
-        reward = RANK_REWARDS[1];
+        reward = RANK_REWARDS[1] ?? null;
       } else if (rank === 2) {
-        reward = RANK_REWARDS[2];
+        reward = RANK_REWARDS[2] ?? null;
       } else if (rank === 3) {
-        reward = RANK_REWARDS[3];
+        reward = RANK_REWARDS[3] ?? null;
       } else if (rank >= 4 && rank <= 10) {
         reward = TOP_10_REWARD;
       } else if (rank >= 11 && rank <= 100) {

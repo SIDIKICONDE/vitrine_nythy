@@ -8,7 +8,8 @@
  * - Agrégat Merchant
  */
 
-import { Merchant, MerchantUpdateData } from '@/types/merchant';
+import { Merchant } from '../entities/Merchant';
+import { MerchantUpdateData } from '../repositories/MerchantRepository';
 import { MerchantNotFoundException, ValidationError } from '../exceptions/MerchantExceptions';
 import { MerchantRepository } from '../repositories/MerchantRepository';
 import { validateBic, validateIban, validateSiret } from '../validators/MerchantValidators';
@@ -102,9 +103,9 @@ export class UpdateMerchantUseCase {
     }
 
     // Validation email (si présent et non vide)
-    if (data.contactInfo?.email && data.contactInfo.email.trim() !== '') {
+    if (data.email && data.email.trim() !== '') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(data.contactInfo.email)) {
+      if (!emailRegex.test(data.email)) {
         throw new ValidationError(
           '❌ Email invalide : veuillez saisir une adresse email valide (ex: contact@exemple.fr).'
         );
@@ -112,9 +113,9 @@ export class UpdateMerchantUseCase {
     }
 
     // Validation téléphone (si présent et non vide)
-    if (data.contactInfo?.phone && data.contactInfo.phone.trim() !== '') {
+    if (data.phone && data.phone.trim() !== '') {
       const phoneRegex = /^\+?[1-9]\d{1,14}$/; // Format E.164
-      if (!phoneRegex.test(data.contactInfo.phone.replace(/\s/g, ''))) {
+      if (!phoneRegex.test(data.phone.replace(/\s/g, ''))) {
         throw new ValidationError(
           '❌ Téléphone invalide : veuillez saisir un numéro au format international (ex: +33123456789 ou +33 1 23 45 67 89).'
         );
@@ -122,9 +123,9 @@ export class UpdateMerchantUseCase {
     }
 
     // Validation URL du site web (si présent et non vide)
-    if (data.contactInfo?.website && data.contactInfo.website.trim() !== '') {
+    if (data.websiteUrl && data.websiteUrl.trim() !== '') {
       try {
-        const website = data.contactInfo.website.trim();
+        const website = data.websiteUrl.trim();
         // Ajouter https:// si aucun protocole n'est présent
         const urlToTest = website.startsWith('http://') || website.startsWith('https://')
           ? website
@@ -146,9 +147,9 @@ export class UpdateMerchantUseCase {
   ): MerchantUpdateData {
     const validatedData = { ...updateData };
 
-    // Règle: Le nom commercial ne peut pas être vide
-    if (validatedData.businessName !== undefined) {
-      if (validatedData.businessName.trim() === '') {
+    // Règle: Le nom ne peut pas être vide
+    if (validatedData.name !== undefined) {
+      if (validatedData.name.trim() === '') {
         throw new Error('Le nom du commerce ne peut pas être vide');
       }
     }

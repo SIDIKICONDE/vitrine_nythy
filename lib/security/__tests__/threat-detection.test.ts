@@ -14,14 +14,14 @@ describe('Threat Detection Module', () => {
       const input = "SELECT * FROM users WHERE id = '1' OR '1'='1'";
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].type).toBe('sql_injection');
+      expect(findings[0]?.type).toBe('sql_injection');
     });
 
     it('should detect XSS in strings', () => {
       const input = '<script>alert("XSS")</script>';
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].type).toBe('xss');
+      expect(findings[0]?.type).toBe('xss');
     });
 
     it('should scan nested objects', () => {
@@ -33,8 +33,8 @@ describe('Threat Detection Module', () => {
       };
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].path).toContain('bio');
-      expect(findings[0].type).toBe('xss');
+      expect(findings[0]?.path).toContain('bio');
+      expect(findings[0]?.type).toBe('xss');
     });
 
     it('should scan arrays', () => {
@@ -43,7 +43,7 @@ describe('Threat Detection Module', () => {
       };
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].path).toContain('[1]');
+      expect(findings[0]?.path).toContain('[1]');
     });
 
     it('should scan deeply nested structures', () => {
@@ -58,7 +58,7 @@ describe('Threat Detection Module', () => {
       };
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].path).toContain('level3.malicious');
+      expect(findings[0]?.path).toContain('level3.malicious');
     });
 
     it('should not flag safe content', () => {
@@ -79,7 +79,7 @@ describe('Threat Detection Module', () => {
       };
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBe(1);
-      expect(findings[0].path).toContain('dangerous');
+      expect(findings[0]?.path).toContain('dangerous');
     });
 
     it('should limit depth to prevent DoS', () => {
@@ -98,7 +98,7 @@ describe('Threat Detection Module', () => {
       const longString = '<script>' + 'a'.repeat(20000) + '</script>';
       const findings = scanObjectForThreats(longString);
       expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].value.length).toBeLessThan(15000);
+      expect(findings[0]?.value.length).toBeLessThan(15000);
     });
 
     it('should handle null and undefined values', () => {
@@ -132,8 +132,8 @@ describe('Threat Detection Module', () => {
       ];
       const findings = scanObjectForThreats(input);
       expect(findings.length).toBe(2);
-      expect(findings[0].path).toContain('[1]');
-      expect(findings[1].path).toContain('[2].nested');
+      expect(findings[0]?.path).toContain('[1]');
+      expect(findings[1]?.path).toContain('[2].nested');
     });
 
     it('should handle empty objects and arrays', () => {
@@ -155,7 +155,7 @@ describe('Threat Detection Module', () => {
       sqlPatterns.forEach(pattern => {
         const findings = scanObjectForThreats(pattern);
         expect(findings.length).toBeGreaterThan(0);
-        expect(findings[0].type).toBe('sql_injection');
+        expect(findings[0]?.type).toBe('sql_injection');
       });
     });
 
@@ -168,14 +168,14 @@ describe('Threat Detection Module', () => {
       xssPatterns.forEach(pattern => {
         const findings = scanObjectForThreats(pattern);
         expect(findings.length).toBeGreaterThan(0);
-        expect(findings[0].type).toBe('xss');
+        expect(findings[0]?.type).toBe('xss');
       });
     });
 
     it('should include the malicious value in findings', () => {
       const malicious = '<script>alert(1)</script>';
       const findings = scanObjectForThreats(malicious);
-      expect(findings[0].value).toBe(malicious);
+      expect(findings[0]?.value).toBe(malicious);
     });
   });
 });

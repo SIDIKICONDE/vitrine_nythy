@@ -13,7 +13,10 @@ export class GetMerchantsByCategoryUseCase {
       throw new Error('Category ID is required');
     }
 
-    return await this.merchantRepository.getMerchantsByCategory(categoryId, limit, offset);
+    const merchants = await this.merchantRepository.getMerchantsByCategory(categoryId);
+    
+    // Appliquer pagination et limite
+    return merchants.slice(offset, offset + limit);
   }
 }
 

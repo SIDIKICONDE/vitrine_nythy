@@ -12,9 +12,9 @@ export class CompleteMerchantRegistrationUseCase {
     // La validation est déjà faite dans MerchantRegistrationEntity
     
     // Créer le commerçant via le repository
-    const merchantId = await this.merchantRepository.registerMerchant(registration);
+    const merchant = await this.merchantRepository.registerMerchant(registration);
 
-    return merchantId;
+    return merchant.id;
   }
 }
 

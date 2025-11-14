@@ -437,7 +437,7 @@ describe('Validation Module', () => {
       const result = validateData(emailSchema, 'not-an-email');
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.errors[0].message).toContain('invalid');
+        expect(result.errors[0]?.message).toContain('invalid');
       }
     });
   });

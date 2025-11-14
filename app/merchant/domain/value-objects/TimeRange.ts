@@ -54,7 +54,9 @@ export class TimeRange {
    * Convertir HH:mm en minutes depuis minuit
    */
   private timeToMinutes(time: string): number {
-    const [hours, minutes] = time.split(':').map(Number);
+    const parts = time.split(':').map(Number);
+    const hours = parts[0] ?? 0;
+    const minutes = parts[1] ?? 0;
     return hours * 60 + minutes;
   }
 

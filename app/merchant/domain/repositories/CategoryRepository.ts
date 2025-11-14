@@ -3,7 +3,8 @@
  * Interface pour la persistance des catégories
  */
 
-import { Category, CategoryType } from '../entities/Category';
+import { Category } from '../entities/Category';
+import { CategoryType } from '../enums/CategoryType';
 
 export interface CategoryRepository {
   getCategories(type?: CategoryType): Promise<Category[]>;

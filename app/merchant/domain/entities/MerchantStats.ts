@@ -4,12 +4,19 @@
  */
 
 export interface MerchantStatsData {
-  totalProducts: number;
-  totalFollowers: number;
-  totalReviews: number;
-  averageRating: number;
-  totalViews: number;
-  totalSales: number;
+  totalProducts?: number;
+  totalFollowers?: number;
+  totalReviews?: number;
+  averageRating?: number;
+  totalViews?: number;
+  totalSales?: number;
+  // Compatibilité avec l'API
+  productsCount?: number;
+  followersCount?: number;
+  savedItemsCount?: number;
+  co2Saved?: number;
+  totalOrders?: number;
+  totalRevenue?: number;
 }
 
 export class MerchantStats {
