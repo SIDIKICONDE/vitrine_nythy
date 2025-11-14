@@ -60,7 +60,7 @@ export default function ActivityFeed({ initialActivities }: ActivityFeedProps = 
         const activitiesWithDates = apiActivities.map(activity => ({
           ...activity,
           timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
-        }));
+        })) as Activity[];
 
         setActivities(activitiesWithDates);
       } catch (error) {
