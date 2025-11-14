@@ -56,17 +56,22 @@ export default function ActivityFeed({ initialActivities }: ActivityFeedProps = 
         // 2. Récupérer les activités
         const apiActivities = await apiDashboardRepository.getActivities(merchantId);
 
+        // Fonction de type guard pour valider le type d'activité
+        const isValidActivityType = (type: string): type is Activity['type'] => {
+          return type === 'order' || type === 'review' || type === 'follower' || type === 'product';
+        };
+
         // Filtrer et convertir les activités valides
-        const activitiesWithDates: Activity[] = apiActivities
-          .filter((activity): activity is typeof activity & { type: Activity['type'] } => {
-            // Valider que le type est bien l'un des types attendus
-            return ['order', 'review', 'follower', 'product'].includes(activity.type);
-          })
+        const activitiesWithDates = apiActivities
+          .filter(activity => isValidActivityType(activity.type))
           .map(activity => ({
-            ...activity,
+            id: activity.id,
             type: activity.type as Activity['type'],
+            icon: activity.icon,
+            title: activity.title,
+            description: activity.description,
             timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
-          }));
+          })) as Activity[];
 
         setActivities(activitiesWithDates);
       } catch (error) {
