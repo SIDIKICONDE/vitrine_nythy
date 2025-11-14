@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * POST /api/admin/maintenance/[action]
  */
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { action: string } }
 ) {
   try {

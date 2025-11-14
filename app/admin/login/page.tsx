@@ -8,7 +8,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
  * Page de connexion admin
  */
 export default function AdminLoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/admin';
 

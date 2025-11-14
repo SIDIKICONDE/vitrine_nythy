@@ -41,18 +41,18 @@ export async function GET() {
 
       return {
         id: doc.id,
-        userId: data.userId || data.user_id || '',
-        userEmail: data.userEmail || data.user_email || '',
-        userName: data.userName || data.user_name || data.displayName || 'Utilisateur inconnu',
-        subject: data.subject || data.title || '',
+        userId: data['userId'] || data['user_id'] || '',
+        userEmail: data['userEmail'] || data['user_email'] || '',
+        userName: data['userName'] || data['user_name'] || data['displayName'] || 'Utilisateur inconnu',
+        subject: data['subject'] || data['title'] || '',
         message: message,
-        category: data.category || 'other',
-        priority: data.priority || 'medium',
-        status: data.status || 'open',
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        assignedTo: data.assignedTo || data.assigned_to,
-        responses: data.responses || [],
+        category: data['category'] || 'other',
+        priority: data['priority'] || 'medium',
+        status: data['status'] || 'open',
+        createdAt: data['createdAt']?.toDate?.()?.toISOString() || new Date().toISOString(),
+        updatedAt: data['updatedAt']?.toDate?.()?.toISOString() || new Date().toISOString(),
+        assignedTo: data['assignedTo'] || data['assigned_to'],
+        responses: data['responses'] || [],
       };
     });
 

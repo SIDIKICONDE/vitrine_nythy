@@ -18,17 +18,17 @@ export async function GET() {
       const data = doc.data();
       return {
         id: doc.id,
-        reporterId: data.reporterId || '',
-        reporterName: data.reporterName || 'Utilisateur inconnu',
-        reportedContentType: data.reportedContentType || 'message',
-        reportedContentId: data.reportedContentId || '',
-        reason: data.reason || '',
-        description: data.description || '',
-        status: data.status || 'pending',
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        resolvedAt: data.resolvedAt?.toDate?.()?.toISOString(),
-        resolvedBy: data.resolvedBy,
-        moderatorNotes: data.moderatorNotes,
+        reporterId: data['reporterId'] || '',
+        reporterName: data['reporterName'] || 'Utilisateur inconnu',
+        reportedContentType: data['reportedContentType'] || 'message',
+        reportedContentId: data['reportedContentId'] || '',
+        reason: data['reason'] || '',
+        description: data['description'] || '',
+        status: data['status'] || 'pending',
+        createdAt: data['createdAt']?.toDate?.()?.toISOString() || new Date().toISOString(),
+        resolvedAt: data['resolvedAt']?.toDate?.()?.toISOString(),
+        resolvedBy: data['resolvedBy'],
+        moderatorNotes: data['moderatorNotes'],
       };
     });
 

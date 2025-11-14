@@ -17,14 +17,14 @@ export async function GET() {
       const data = doc.data();
       return {
         id: doc.id,
-        question: data.question || '',
-        answer: data.answer || '',
-        category: data.category || 'Général',
-        order: data.order || 0,
-        isPublished: data.isPublished ?? true,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        views: data.views || 0,
+        question: data['question'] || '',
+        answer: data['answer'] || '',
+        category: data['category'] || 'Général',
+        order: data['order'] || 0,
+        isPublished: data['isPublished'] ?? true,
+        createdAt: data['createdAt']?.toDate?.()?.toISOString() || new Date().toISOString(),
+        updatedAt: data['updatedAt']?.toDate?.()?.toISOString() || new Date().toISOString(),
+        views: data['views'] || 0,
       };
     });
 
