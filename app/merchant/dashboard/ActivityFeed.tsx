@@ -56,11 +56,16 @@ export default function ActivityFeed({ initialActivities }: ActivityFeedProps = 
         // 2. Récupérer les activités
         const apiActivities = await apiDashboardRepository.getActivities(merchantId);
 
-        // Convertir les dates string en Date avec gestion des valeurs manquantes
-        const activitiesWithDates = apiActivities.map(activity => ({
-          ...activity,
-          timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
-        })) as Activity[];
+        // Filtrer et convertir les activités valides
+        const activitiesWithDates = apiActivities
+          .filter((activity): activity is typeof activity & { type: Activity['type'] } => {
+            // Valider que le type est bien l'un des types attendus
+            return ['order', 'review', 'follower', 'product'].includes(activity.type);
+          })
+          .map(activity => ({
+            ...activity,
+            timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
+          }));
 
         setActivities(activitiesWithDates);
       } catch (error) {
