@@ -12,34 +12,89 @@
 
 # testing
 /coverage
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
 
 # next.js
 /.next/
 /out/
+.next/
+out/
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+lerna-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env*.local
+.env.production
+.env.development
+.env.test
+!.env.example
+!.env.production.example
+!.env.local.example
 
-# Firebase service account credentials
+# Firebase
 firebase-service-account.json
 *-firebase-adminsdk-*.json
+firebase-debug.log
+firestore-debug.log
+.firebase/
+.firebaserc.backup
 
 # vercel
 .vercel
+.vercel.json
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local development
+.cache/
+tmp/
+temp/
+
+# logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# IDEs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea
+*.sublime-project
+*.sublime-workspace
+
+# Sentry
+.sentryclirc
+
+# Local configuration
+local-config.json
