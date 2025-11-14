@@ -3,7 +3,7 @@
 import { ReactElement, useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Announcement } from '@/types/admin';
-import { Megaphone, Plus, Edit, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 
 /**
  * Page de gestion des annonces
